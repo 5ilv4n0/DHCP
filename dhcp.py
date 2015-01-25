@@ -7,7 +7,7 @@ import socket, binascii, time, IN
 
 from sys import exit
 from optparse import OptionParser
-import json
+
 
 def packet_raw_output(string, hx=True):
 	if hx:
@@ -32,45 +32,39 @@ def packet_raw_output(string, hx=True):
 	print '+-----------------'+ '-'*(4*hx) +'+'
 
 
+class Option_Type:
+	SUBNET_MASK				= 1
+	ROUTER					= 3
+	DNS_SERVER				= 6
+	HOSTNAME 				= 12
+	DOMAIN_NAME				= 15
+	MTU						= 26
+	BROADCAST				= 28
+	STATIC_ROUTING_TABLE 	= 33
+	REQUESTED_IP			= 50
+	IP_LEASE_TIME			= 51
+	MSG_TYPE 				= 53
+	SERVER_ID				= 54
+	PARAM_LIST				= 55
+	MAX_MSG_SIZE 			= 57
+	RENEW_TIME_VALUE		= 58
+	REBINDING_TIME_VALUE	= 59
+	CLASS_ID				= 60
 
-packet_raw_output('Hallo Spencer 10.10.0.1')
-packet_raw_output('Hallo Spencer 10.10.0.1', False)
-sys.exit()
+class Message_Type:
+	DHCPDiscover 	= 1
+	DHCPOffer 		= 2
+	DHCPRequest		= 3
+	DHCPDecline		= 4
+	DHCPAck			= 5
+	DHCPNak			= 6
+	DHCPRelease 	= 7
+	DHCPInform		= 8
 
-class Packet(object):
+class DHCP_Packet(object):
+	RESPONSE	= 1
+	REPLY 		= 2
 
-	class Option_Type:
-		SUBNET_MASK				= 1
-		ROUTER					= 3
-		DNS_SERVER				= 6
-		HOSTNAME 				= 12
-		DOMAIN_NAME				= 15
-		MTU						= 26
-		BROADCAST				= 28
-		STATIC_ROUTING_TABLE 	= 33
-		REQUESTED_IP			= 50
-		IP_LEASE_TIME			= 51
-		MSG_TYPE 				= 53
-		SERVER_ID				= 54
-		PARAM_LIST				= 55
-		MAX_MSG_SIZE 			= 57
-		RENEW_TIME_VALUE		= 58
-		REBINDING_TIME_VALUE	= 59
-		CLASS_ID				= 60
-
-
-
-
-	MSG_TYPE = {
-		1: 'DHCPDiscover',
-		2: 'DHCPOffer',
-		3: 'DHCPRequest',
-		4: 'DHCPDecline',
-		5: 'DHCPAck',
-		6: 'DHCPNak',
-		7: 'DHCPRelease',
-		8: 'DHCPInform'
-	}
 
 
 	OPTION_TYPE = {
@@ -93,26 +87,31 @@ class Packet(object):
 		60: 'CLASS_ID'
 	}
 
+	MSG_TYPE = {
+		1: 'DHCPDiscover',
+		2: 'DHCPOffer',
+		3: 'DHCPRequest',
+		4: 'DHCPDecline',
+		5: 'DHCPAck',
+		6: 'DHCPNak',
+		7: 'DHCPRelease',
+		8: 'DHCPInform'
+	}
+
 
 	def __init__(self, data):
 		self.data = data
-		#for char in data:
-		#	self.data.append( hex(ord(char))[2:].rjust(2,'0')+'[' + str(ord(char)).rjust(3,'0') + ']' )
-
 		self.op = ord(data[0])
 		self.htype = ord(data[1])
 		self.hlen = ord(data[2])
 		self.hops = ord(data[3])
-
 		self.xid = self.read_xid(data)
 		self.secs = self.read_secs(data)
 		self.flags = self.read_flags(data)
-
 		self.client_ip = self.read_ip(data, 12)
 		self.your_ip = self.read_ip(data, 16)
 		self.server_ip = self.read_ip(data, 20)
 		self.gateway_ip = self.read_ip(data, 24)
-
 		self.client_hw_address = self.read_hw(data)
 		self.client_hw_address_extention = self.read_hw_extention(data)
 		self.additional_options_data = self.read_additional_options_data(data)
@@ -122,45 +121,33 @@ class Packet(object):
 
 		for option in self.get_dhcp_options_raw(data):
 			#print option
-			if option[0] == self.Option_Type.HOSTNAME:
+			if option[0] == Option_Type.HOSTNAME:
 				self.dhcp_option_hostname = self.read_string(option)
 
-			elif option[0] == self.Option_Type.MSG_TYPE:
+			elif option[0] == Option_Type.MSG_TYPE:
 				self.dhcp_message_type = option[1][0]
 
-			elif option[0] == self.Option_Type.MAX_MSG_SIZE:
+			elif option[0] == Option_Type.MAX_MSG_SIZE:
 				self.dhcp_max_message_size = self.read_max_message_size(option)
 
-			elif option[0] == self.Option_Type.CLASS_ID:
+			elif option[0] == Option_Type.CLASS_ID:
 				self.dhcp_class_identifier = self.read_string(option)
 
-			elif option[0] == self.Option_Type.PARAM_LIST:
+			elif option[0] == Option_Type.PARAM_LIST:
 				self.dhcp_parameter_list = option[1]
-				for param in self.dhcp_parameter_list:
-					print self.OPTION_TYPE[param]
 
-			elif option[0] == self.Option_Type.REQUESTED_IP:
+			elif option[0] == Option_Type.REQUESTED_IP:
 				self.requested_ip = self.read_requested_ip(option)
+
+			elif option[0] == Option_Type.SERVER_ID:
+				self.requested_Server_ip = self.read_requested_ip(option)
 
 			else:
 				print 'NOT KNOWN YET: ', option
 
 
 
-
-
-		# print 'MSG_TYPE:    ', self.MSG_TYPE[self.dhcp_message_type]
-		# print 'HOSTNAME:    ', repr(self.dhcp_option_hostname)
-		# print 'MAXMSGSIZE:  ', self.dhcp_max_message_size
-		# print 'CLASS_IDENT: ', self.dhcp_class_identifier
-		# print 'PARAM_LIST:  ', self.dhcp_parameter_list
-		# print
-
-
-
-
-
-
+		self.domain_name = 'local'
 
 
 
@@ -251,24 +238,23 @@ class Packet(object):
 		return '.'.join(ip)
 
 
-
 	def is_dhcp_discovery(self):
-		if self.dhcp_message_type == 1:
+		if self.dhcp_message_type == Message_Type.DHCPDiscover:
 			return True
 		return False
 
 	def is_dhcp_request(self):
-		if self.dhcp_message_type == 3:
+		if self.dhcp_message_type == Message_Type.DHCPRequest:
 			return True
 		return False
 
 
 
-	def generate_dhcp_offer_paket(self, your_ip, server_ip):
-		self.op = 2
+	def generate_dhcp_paket(self, message_type, your_ip, server_ip):
+		self.op = self.REPLY
 		self.your_ip = your_ip
 		self.server_ip = server_ip
-		self.dhcp_message_type = 2
+		self.dhcp_message_type = message_type
 
 		lease_time = 3600
 		lease_time_bytes = binascii.unhexlify(hex(lease_time)[2:].rjust(8,'0'))
@@ -289,46 +275,20 @@ class Packet(object):
 			tftp_file_option_list.append(ord(char))
 		tftp_file_option = (67,tftp_file_option_list)
 
-		options = [
-			(53,[self.dhcp_message_type]),
-			(1,[255,255,0,0]),
-			(54,[10,10,10,2]),
-			(28,[10,10,255,255]),
-			(3,[10,10,0,1]),
-			(6,[8,8,8,8,8,8,4,4]),
-			lease_time_option,
-			tftp_address_option,
-			tftp_file_option
-		]
+		domain_name = self.domain_name
+		domain_name_option_list = []
+		for char in domain_name:
+			domain_name_option_list.append(ord(char))
+		domain_name_option = (15,domain_name_option_list)
 
-		options_string = self.generate_dhcp_options(options)
-		packet_string = self.generate_packet(options_string)
-		return packet_string
 
-	def generate_dhcp_ack_paket(self, your_ip, server_ip):
-		self.op = 2
-		self.your_ip = your_ip
-		self.server_ip = server_ip
-		self.dhcp_message_type = 5
 
-		lease_time = 3600
-		lease_time_bytes = binascii.unhexlify(hex(lease_time)[2:].rjust(8,'0'))
-		lease_time_option_list = []
-		for char in lease_time_bytes:
-			lease_time_option_list.append(ord(char))
-		lease_time_option = (51,lease_time_option_list)
+		host_name = self.dhcp_option_hostname
+		host_name_option_list = []
+		for char in host_name:
+			host_name_option_list.append(ord(char))
+		host_name_option = (12,host_name_option_list)
 
-		tftp_address = server_ip
-		tftp_address_option_list = []
-		for char in tftp_address:
-			tftp_address_option_list.append(ord(char))
-		tftp_address_option = (66,tftp_address_option_list)
-
-		tftp_file = 'pxelinux.0'
-		tftp_file_option_list = []
-		for char in tftp_file:
-			tftp_file_option_list.append(ord(char))
-		tftp_file_option = (67,tftp_file_option_list)
 
 		options = [
 			(53,[self.dhcp_message_type]),
@@ -337,6 +297,8 @@ class Packet(object):
 			(28,[10,10,255,255]),
 			(3,[10,10,0,1]),
 			(6,[8,8,8,8,8,8,4,4]),
+			domain_name_option,
+			host_name_option,
 			lease_time_option,
 			tftp_address_option,
 			tftp_file_option
@@ -345,7 +307,6 @@ class Packet(object):
 		options_string = self.generate_dhcp_options(options)
 		packet_string = self.generate_packet(options_string)
 		return packet_string
-
 
 
 	def generate_dhcp_options(self, options):
@@ -390,8 +351,6 @@ class Packet(object):
 		packet_string += chr(0)+chr(255)
 		return packet_string
 
-
-
 	def write_ip(self, ip_string):
 		ip_string = ip_string.split('.')
 		ip = []
@@ -420,6 +379,16 @@ class Packet(object):
 
 
 
+class DHCP_Server(object):
+	def __init__(self, interface, server_ip, netmask):
+		self.interface = interface
+		self.port = 67
+		self.server_ip = server_ip
+		self.netmask = netmask
+		self.gateway = server_ip
+		self.dns = ['8.8.8.8', '8.8.4.4']
+		self.range = ['10.10.50.1','10.10.50.9']
+		self.lease_time = 60
 
 
 
@@ -431,18 +400,6 @@ class Packet(object):
 if not hasattr(IN, 'SO_BINDTODEVICE'):
 	IN.SO_BINDTODEVICE = 25  #http://stackoverflow.com/a/8437870/541038
 
-def release(): #release a lease after timelimit has expired
-    for lease in leases:
-       if not lease[1]:
-          if time.time()+leasetime == leasetime:
-              continue
-          if lease[-1] > time.time()+leasetime:
-             print "Released",lease[0]
-             lease[1]=False
-             lease[2]='000000000000'
-             lease[3]=0
-
-
 
 
 interface = 'wlan0'
@@ -453,7 +410,7 @@ gateway = '10.10.0.1'
 dns = '8.8.8.8'
 range_from = '10.10.50.1'
 range_to = '10.10.50.254'
-lease_time = 3600
+lease_time = 60
 
 
 
@@ -467,18 +424,16 @@ s.bind(('',port))
 while True:
 	try:
 		message, addressf = s.recvfrom(8192)
-        #if not message.startswith('\x01') and not addressf[0] == '0.0.0.0':
-            #continue #only serve if a dhcp request
-		print '---------------------------'
 
-		packet = Packet(message)
+		packet = DHCP_Packet(message)
+
 		if packet.is_dhcp_discovery():
-			data = packet.generate_dhcp_offer_paket(range_from,server_ip)
+			data = packet.generate_dhcp_paket(Message_Type.DHCPOffer, range_from,server_ip)
 			if data:
 				s.sendto(data,('<broadcast>',68))
 
 		elif packet.is_dhcp_request():
-			data = packet.generate_dhcp_ack_paket(range_from,server_ip)
+			data = packet.generate_dhcp_paket(Message_Type.DHCPAck, range_from,server_ip)
 			if data:
 				s.sendto(data,('<broadcast>',68))
 			print 'LEASED:', range_from
