@@ -10,15 +10,31 @@ from optparse import OptionParser
 import json
 
 
+
+
 class Packet(object):
 
 	class Option_Type:
-		HOSTNAME 		= 12
-		REQUESTED_IP	= 50
-		MSG_TYPE 		= 53
-		PARAM_LIST		= 55
-		MAX_MSG_SIZE 	= 57
-		CLASS_ID		= 60
+		SUBNET_MASK				= 1
+		ROUTER					= 3
+		DNS_SERVER				= 6
+		HOSTNAME 				= 12
+		DOMAIN_NAME				= 15
+		MTU						= 26
+		BROADCAST				= 28
+		STATIC_ROUTING_TABLE 	= 33
+		REQUESTED_IP			= 50
+		IP_LEASE_TIME			= 51
+		MSG_TYPE 				= 53
+		SERVER_ID				= 54
+		PARAM_LIST				= 55
+		MAX_MSG_SIZE 			= 57
+		RENEW_TIME_VALUE		= 58
+		REBINDING_TIME_VALUE	= 59
+		CLASS_ID				= 60
+
+
+
 
 	MSG_TYPE = {
 		1: 'DHCPDiscover',
@@ -29,6 +45,27 @@ class Packet(object):
 		6: 'DHCPNak',
 		7: 'DHCPRelease',
 		8: 'DHCPInform'
+	}
+
+
+	OPTION_TYPE = {
+		1: 'SUBNET_MASK',
+		3: 'ROUTER',
+		6: 'DNS_SERVER',
+		12: 'HOSTNAME',
+		15: 'DOMAIN_NAME',
+		26: 'MTU',
+		28: 'BROADCAST',
+		33: 'STATIC_ROUTING_TABLE',
+		50: 'REQUESTED_IP',
+		51: 'IP_LEASE_TIME',
+		53: 'MSG_TYPE',
+		54: 'SERVER_ID',
+		55: 'PARAM_LIST',
+		57: 'MAX_MSG_SIZE',
+		58: 'RENEW_TIME_VALUE',
+		59: 'REBINDING_TIME_VALUE',
+		60: 'CLASS_ID'
 	}
 
 
@@ -46,10 +83,10 @@ class Packet(object):
 		self.secs = self.read_secs(data)
 		self.flags = self.read_flags(data)
 
-		self.client_ip = self.read_ip(data)
-		self.your_ip = self.read_ip(data)
-		self.server_ip = self.read_ip(data)
-		self.gateway_ip = self.read_ip(data)
+		self.client_ip = self.read_ip(data, 12)
+		self.your_ip = self.read_ip(data, 16)
+		self.server_ip = self.read_ip(data, 20)
+		self.gateway_ip = self.read_ip(data, 24)
 
 		self.client_hw_address = self.read_hw(data)
 		self.client_hw_address_extention = self.read_hw_extention(data)
@@ -59,7 +96,7 @@ class Packet(object):
 
 
 		for option in self.get_dhcp_options_raw(data):
-
+			#print option
 			if option[0] == self.Option_Type.HOSTNAME:
 				self.dhcp_option_hostname = self.read_string(option)
 
@@ -74,6 +111,8 @@ class Packet(object):
 
 			elif option[0] == self.Option_Type.PARAM_LIST:
 				self.dhcp_parameter_list = option[1]
+				for param in self.dhcp_parameter_list:
+					print self.OPTION_TYPE[param]
 
 			elif option[0] == self.Option_Type.REQUESTED_IP:
 				self.requested_ip = self.read_requested_ip(option)
@@ -94,18 +133,18 @@ class Packet(object):
 
 
 
-		self.raw_data = []
-		for char in self.data:
-			self.raw_data.append( hex(ord(char))[2:].rjust(2,'0')+'[' + str(ord(char)).rjust(3,'0') + ']' )
-		c = 0
-		for id, d in enumerate(self.raw_data):
-			if c == 0:
-				print str(id).rjust(3,'0')+': ',
-			print d,
-			c += 1
-			if c == 4:
-				c=0
-				print
+		# self.raw_data = []
+		# for char in self.data:
+		# 	self.raw_data.append( hex(ord(char))[2:].rjust(2,'0')+'[' + str(ord(char)).rjust(3,'0') + ']' )
+		# c = 0
+		# for id, d in enumerate(self.raw_data):
+		# 	if c == 0:
+		# 		print str(id).rjust(3,'0')+': ',
+		# 	print d,
+		# 	c += 1
+		# 	if c == 4:
+		# 		c=0
+		# 		print
 
 
 
@@ -130,13 +169,15 @@ class Packet(object):
 
 	def read_hw(self, data, offset=28):
 		client_hw_data = (
-		str(ord(data[offset])),
-		str(ord(data[offset+1])),
-		str(ord(data[offset+2])),
-		str(ord(data[offset+3])),
-		str(ord(data[offset+4])),
-		str(ord(data[offset+5])))
+		str(hex(ord(data[offset+0])))[2:].rjust(2,'0'),
+		str(hex(ord(data[offset+1])))[2:].rjust(2,'0'),
+		str(hex(ord(data[offset+2])))[2:].rjust(2,'0'),
+		str(hex(ord(data[offset+3])))[2:].rjust(2,'0'),
+		str(hex(ord(data[offset+4])))[2:].rjust(2,'0'),
+		str(hex(ord(data[offset+5])))[2:].rjust(2,'0'))
 		client_hw = ':'.join(client_hw_data)
+
+		#print client_hw, client_hw_data
 		return client_hw
 
 	def read_hw_extention(self, data, offset=28):
@@ -202,16 +243,161 @@ class Packet(object):
 			return True
 		return False
 
+	def is_dhcp_request(self):
+		if self.dhcp_message_type == 3:
+			return True
+		return False
 
 
 
+	def generate_dhcp_offer_paket(self, your_ip, server_ip):
+		self.op = 2
+		self.your_ip = your_ip
+		self.server_ip = server_ip
+		self.dhcp_message_type = 2
+
+		lease_time = 3600
+		lease_time_bytes = binascii.unhexlify(hex(lease_time)[2:].rjust(8,'0'))
+		lease_time_option_list = []
+		for char in lease_time_bytes:
+			lease_time_option_list.append(ord(char))
+		lease_time_option = (51,lease_time_option_list)
+
+		tftp_address = server_ip
+		tftp_address_option_list = []
+		for char in tftp_address:
+			tftp_address_option_list.append(ord(char))
+		tftp_address_option = (66,tftp_address_option_list)
+
+		tftp_file = 'pxelinux.0'
+		tftp_file_option_list = []
+		for char in tftp_file:
+			tftp_file_option_list.append(ord(char))
+		tftp_file_option = (67,tftp_file_option_list)
+
+		options = [
+			(53,[self.dhcp_message_type]),
+			(1,[255,255,0,0]),
+			(54,[10,10,10,2]),
+			(28,[10,10,255,255]),
+			(3,[10,10,0,1]),
+			(6,[8,8,8,8,8,8,4,4]),
+			lease_time_option,
+			tftp_address_option,
+			tftp_file_option
+		]
+
+		options_string = self.generate_dhcp_options(options)
+		packet_string = self.generate_packet(options_string)
+		return packet_string
+
+	def generate_dhcp_ack_paket(self, your_ip, server_ip):
+		self.op = 2
+		self.your_ip = your_ip
+		self.server_ip = server_ip
+		self.dhcp_message_type = 5
+
+		lease_time = 3600
+		lease_time_bytes = binascii.unhexlify(hex(lease_time)[2:].rjust(8,'0'))
+		lease_time_option_list = []
+		for char in lease_time_bytes:
+			lease_time_option_list.append(ord(char))
+		lease_time_option = (51,lease_time_option_list)
+
+		tftp_address = server_ip
+		tftp_address_option_list = []
+		for char in tftp_address:
+			tftp_address_option_list.append(ord(char))
+		tftp_address_option = (66,tftp_address_option_list)
+
+		tftp_file = 'pxelinux.0'
+		tftp_file_option_list = []
+		for char in tftp_file:
+			tftp_file_option_list.append(ord(char))
+		tftp_file_option = (67,tftp_file_option_list)
+
+		options = [
+			(53,[self.dhcp_message_type]),
+			(1,[255,255,0,0]),
+			(54,[10,10,10,2]),
+			(28,[10,10,255,255]),
+			(3,[10,10,0,1]),
+			(6,[8,8,8,8,8,8,4,4]),
+			lease_time_option,
+			tftp_address_option,
+			tftp_file_option
+		]
+
+		options_string = self.generate_dhcp_options(options)
+		packet_string = self.generate_packet(options_string)
+		return packet_string
 
 
 
+	def generate_dhcp_options(self, options):
+		options_string = ''
+		for option in options:
+			options_string += self.generate_dhcp_option(option)
+		return options_string
+
+	def generate_dhcp_option(self, option):
+		option_type = option[0]
+		option_length = len(option[1])
+		option_payload = option[1]
+		option_packet = [option_type, option_length]
+		option_packet.extend(option_payload)
+		return self.generate_string(option_packet)
+
+	def generate_string(self, byte_list):
+		string = ''
+		for byte in byte_list:
+			string += chr(byte)
+		return string
+
+	def generate_packet(self, options_string):
+		packet_string = ''
+		packet_string += chr(self.op)
+		packet_string += chr(self.htype)
+		packet_string += chr(self.hlen)
+		packet_string += chr(self.hops)
+		packet_string += self.generate_string(self.xid)
+		packet_string += self.generate_string(self.secs)
+		packet_string += self.generate_string(self.flags)
+		packet_string += self.generate_string(self.write_ip(self.client_ip))
+		packet_string += self.generate_string(self.write_ip(self.your_ip))
+		packet_string += self.generate_string(self.write_ip(self.server_ip))
+		packet_string += self.generate_string(self.write_ip(self.gateway_ip))
+
+		packet_string += self.generate_string(self.write_hw(self.client_hw_address))
+		packet_string += self.client_hw_address_extention
+		packet_string += self.additional_options_data
+		packet_string += self.generate_string(self.magic_cookie)
+		packet_string += options_string
+		packet_string += chr(0)+chr(255)
+		return packet_string
 
 
 
+	def write_ip(self, ip_string):
+		ip_string = ip_string.split('.')
+		ip = []
+		for byte in ip_string:
+			try:
+				ip.append(int(byte))
+			except:
+				break
+		return ip
 
+	def write_hw(self, hw_string):
+		hw_string = hw_string.split(':')
+		hw = []
+		for byte in hw_string:
+			byte = int(byte, 16)
+			try:
+				hw.append(int(byte))
+			except:
+				break
+		return hw
 
 
 
@@ -231,61 +417,6 @@ class Packet(object):
 if not hasattr(IN, 'SO_BINDTODEVICE'):
 	IN.SO_BINDTODEVICE = 25  #http://stackoverflow.com/a/8437870/541038
 
-
-def slicendice(msg, slices): #generator for each of the dhcp fields
-    for x in slices:
-        if str(type(x)) == "<type 'str'>": x=eval(x) #really dirty, deals with variable length options
-        yield msg[:x]
-        msg = msg[x:]
-
-
-def reqparse(message): #handles either DHCPDiscover or DHCPRequest
-    #using info from http://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol
-    #the tables titled DHCPDISCOVER and DHCPOFFER
-    data=None
-    dhcpfields=[1,1,1,1,4,2,2,4,4,4,4,6,10,192,4,"msg.rfind('\xff')",1,None]
-    #send: boolean as to whether to send data back, and data: data to send, if any
-    #print len(message)
-    hexmessage=binascii.hexlify(message)
-    messagesplit=[binascii.hexlify(x) for x in slicendice(message,dhcpfields)]
-    dhcpopt=messagesplit[15][:6] #hope DHCP type is first. Should be.
-
-    if dhcpopt == '350101':
-        #DHCPDiscover
-        #craft DHCPOffer
-        #DHCPOFFER creation:
-        #options = \xcode \xlength \xdata
-        lease=getlease(messagesplit[11])
-        print 'Leased:',lease
-        data='\x02\x01\x06\x00'+binascii.unhexlify(messagesplit[4])+'\x00\x04'
-        data+='\x80\x00'+'\x00'*4+socket.inet_aton(lease)
-        data+=socket.inet_aton(address)+'\x00'*4
-        data+=binascii.unhexlify(messagesplit[11])+'\x00'*10+'\x00'*192
-        data+='\x63\x82\x53\x63'+'\x35\x01\x02'+'\x01\x04'
-        data+=socket.inet_aton(netmask)+'\x36\x04'+socket.inet_aton(address)
-        data+='\x1c\x04'+socket.inet_aton(broadcast)+'\x03\x04'
-        data+=socket.inet_aton(gateway)+'\x06\x04'+socket.inet_aton(dns)
-        data+='\x33\x04'+binascii.unhexlify(hex(leasetime)[2:].rjust(8,'0'))
-        data+='\x42'+binascii.unhexlify(hex(len(tftp))[2:].rjust(2,'0'))+tftp
-        data+='\x43'+binascii.unhexlify(hex(len(pxefilename)+1)[2:].rjust(2,'0'))
-        data+=pxefilename+'\x00\xff'
-
-    elif dhcpopt == '350103':
-        #DHCPRequest
-        #craft DHCPACK
-        data='\x02\x01\x06\x00'+binascii.unhexlify(messagesplit[4])+'\x00'*8
-        data+=binascii.unhexlify(messagesplit[15][messagesplit[15].find('3204')+4:messagesplit[15].find('3204')+12])
-        data+=socket.inet_aton(address)+'\x00'*4
-        data+=binascii.unhexlify(messagesplit[11])+'\x00'*202
-        data+='\x63\x82\x53\x63'+'\x35\x01\05'+'\x36\x04'+socket.inet_aton(address)
-        data+='\x01\x04'+socket.inet_aton(netmask)+'\x03\x04'
-        data+=socket.inet_aton(address)+'\x33\x04'
-        data+=binascii.unhexlify(hex(leasetime)[2:].rjust(8,'0'))
-        data+='\x42'+binascii.unhexlify(hex(len(tftp))[2:].rjust(2,'0'))
-        data+=tftp+'\x43'+binascii.unhexlify(hex(len(pxefilename)+1)[2:].rjust(2,'0'))
-        data+=pxefilename+'\x00\xff'
-    return data
-
 def release(): #release a lease after timelimit has expired
     for lease in leases:
        if not lease[1]:
@@ -297,144 +428,50 @@ def release(): #release a lease after timelimit has expired
              lease[2]='000000000000'
              lease[3]=0
 
-def getlease(hwaddr): #return the lease of mac address, or create if doesn't exist
-   global leases
-   for lease in leases:
-      if hwaddr == lease[2]:
-         return lease[0]
-   for lease in leases:
-      if not lease[1]:
-         lease[1]=True
-         lease[2]=hwaddr
-         lease[3]=time.time()
-         return lease[0]
-
-if __name__ == "__main__":
-    parser = OptionParser(description='%prog - a simple DHCP server', usage='%prog [options]')
-    parser.add_option("-a", "--address", dest="address", action="store", help='server ip address (required).')
-    parser.add_option("-i", "--interface", dest="interface", action="store", help='network interface to use (default all interfaces).')
-    parser.add_option("-p", "--port", dest="port", action="store", help='server port to bind (default 67).')
-    parser.add_option("-f", "--from", dest="offerfrom", action="store", help='ip pool from (default x.x.x.100).')
-    parser.add_option("-t", "--to", dest="offerto", action="store", help='ip pool to (default x.x.x.150).')
-    parser.add_option("-b", "--broadcast", dest="broadcast", action="store", help='broadcast ip to reply (x.x.x.254).')
-    parser.add_option("-n", "--netmask", dest="netmask", action="store", help='netmask (default 255.255.255.0).')
-    parser.add_option("-s", "--tftp", dest="tftp", action="store", help='tftp ip address (default ip address provided).')
-    parser.add_option("-d", "--dns", dest="dns", action="store", help='dns ip address (default 8.8.8.8).')
-    parser.add_option("-g", "--gateway", dest="gateway", action="store", help='gateway ip address (default ip address provided).')
-    parser.add_option("-x", "--pxefilename", dest="pxefilename", action="store", help='pxe filename (default pxelinux.0).')
-
-    (options, args) = parser.parse_args()
-
-    if not (args or options.address):
-        parser.print_help()
-        exit(1)
-
-    if options.interface:
-        interface = options.interface
-    else:
-        interface = '' # Symbolic name meaning all available interfaces
-
-    if options.port:
-        port = options.port
-    else:
-        port = '67'
-	port = int(port)
-
-    if options.address:
-        address = options.address
-        elements_in_address = address.split('.')
-        if len(elements_in_address) != 4:
-            sys.exit(os.path.basename(__file__) + ": invalid ip address")
-    else:
-        exit(1)
-
-    if options.offerfrom:
-        offerfrom = options.offerfrom
-    else:
-        offerfrom = '.'.join(elements_in_address[0:3])
-        offerfrom = offerfrom + '.100'
-
-    if options.offerto:
-        offerto = options.offerto
-    else:
-        offerto = '.'.join(elements_in_address[0:3])
-        offerto = offerto + '.150'
-
-    if options.broadcast:
-        broadcast = options.broadcast
-    else:
-        broadcast = '.'.join(elements_in_address[0:3])
-        broadcast = broadcast + '.254'
-
-    if options.netmask:
-        netmask = options.netmask
-    else:
-        netmask = '255.255.255.0'
-
-    if options.tftp:
-        tftp = options.tftp
-    else:
-        tftp = address
-
-    if options.dns:
-        dns = options.dns
-    else:
-        dns = '8.8.8.8'
-
-    if options.gateway:
-        gateway = options.gateway
-    else:
-        gateway = address
-
-    if options.pxefilename:
-        pxefilename = options.pxefilename
-    else:
-        pxefilename = 'pxelinux.0'
 
 
 
-
-    leasetime = 86400 #int
-    leases = []
-
-    #next line creates the (blank) leases table. This probably isn't necessary.
-    #for ip in ['.'.join(elements_in_address[0:3])+'.'+str(x) for x in range(int(offerfrom[offerfrom.rfind('.')+1:]),int(offerto[offerto.rfind('.')+1:])+1)]:
-    #    leases.append([ip,False,'000000000000',0])
-
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.setsockopt(socket.SOL_SOCKET,IN.SO_BINDTODEVICE, interface+'\0') #experimental
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    s.bind(('',port))
-    #s.sendto(data,(ip,port))
-
-    while True: #main loop
-        try:
-            message, addressf = s.recvfrom(8192)
-            #if not message.startswith('\x01') and not addressf[0] == '0.0.0.0':
-                #continue #only serve if a dhcp request
-            print '---------------------------'
-
-            packet = Packet(message)
-            if packet.is_dhcp_discovery():
-	            print 'MSG_TYPE:    ', packet.MSG_TYPE[packet.dhcp_message_type]
-	            print 'HOSTNAME:    ', packet.dhcp_option_hostname
-	            print 'MAXMSGSIZE:  ', packet.dhcp_max_message_size
-	            print 'CLASS_IDENT: ', packet.dhcp_class_identifier
-	            print 'PARAM_LIST:  ', packet.dhcp_parameter_list
-	            print 'CLIENT_IP:   ', packet.client_ip
-            try:
-	            print packet.requested_ip
-            except:
-	            pass
+interface = 'wlan0'
+port = 67
+server_ip = '10.10.10.2'
+netmask = '255.255.0.0'
+gateway = '10.10.0.1'
+dns = '8.8.8.8'
+range_from = '10.10.50.1'
+range_to = '10.10.50.254'
+lease_time = 3600
 
 
 
-            #data = reqparse(message) #handle request
-            #if data:
-                #s.sendto(data,('<broadcast>',68)) #reply
-            #release() #update releases table
-        except KeyboardInterrupt:
-            exit()
-    #    except:
-    #        continue
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.setsockopt(socket.SOL_SOCKET,IN.SO_BINDTODEVICE, interface+'\0') #experimental
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+s.bind(('',port))
+
+
+while True:
+	try:
+		message, addressf = s.recvfrom(8192)
+        #if not message.startswith('\x01') and not addressf[0] == '0.0.0.0':
+            #continue #only serve if a dhcp request
+		print '---------------------------'
+
+		packet = Packet(message)
+		if packet.is_dhcp_discovery():
+			data = packet.generate_dhcp_offer_paket(range_from,server_ip)
+			if data:
+				s.sendto(data,('<broadcast>',68))
+
+		elif packet.is_dhcp_request():
+			data = packet.generate_dhcp_ack_paket(range_from,server_ip)
+			if data:
+				s.sendto(data,('<broadcast>',68))
+			print 'LEASED:', range_from
+
+
+        #release() #update releases table
+	except KeyboardInterrupt:
+		exit()
+#    except:
+#        continue
