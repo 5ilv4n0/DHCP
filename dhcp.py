@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-
-#dhcpd.py pure python dhcp server pxe capable
-#psychomario - https://github.com/psychomario
+# -*- coding: utf-8 -*-
 
 import socket, binascii, time, IN
 from json import dumps
@@ -532,6 +530,7 @@ class Leases(dict):
 class DHCP_Server(object):
 	def __init__(self, interface, server_ip, netmask):
 		self.interface = interface
+		self.mtu = self.__get_mtu()
 		self.port = 67
 		self.server_ip = server_ip
 		self.netmask = netmask
@@ -542,6 +541,15 @@ class DHCP_Server(object):
 		self.leases = Leases(self.range)
 
 
+
+		print self.interface, self.mtu
+
+
+
+	def __get_mtu(self):
+		with open('/sys/class/net/'+self.interface+'/mtu') as mtu:
+			mtu = mtu.read()
+		return int(mtu)
 
 	def run(self):
 		if not hasattr(IN, 'SO_BINDTODEVICE'):
