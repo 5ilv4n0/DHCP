@@ -378,6 +378,159 @@ class DHCP_Packet(object):
 
 
 
+class DHCPRangeError(Exception):
+	pass
+
+
+
+class Lease(dict):
+	def __init__(self, **keyword_args):
+		dict.__init__(self, keyword_args)
+		self.in_use()
+
+		if not 'mac' in self.keys():
+			self['mac'] = '00:00:00:00:00:00'
+			self.mac = self['mac']
+			self.in_use(False)
+
+		if not 'ip' in self.keys():
+			self['ip'] = '0.0.0.0'
+			self.ip = self['ip']
+			self.in_use(False)
+
+		if not 'time' in self.keys():
+			self['time'] = 86400
+			self.time = self['time']
+
+		self.update_create_time()
+
+
+	def update_create_time(self):
+		self['create_time'] = int(time.time())
+		self.create_time = self['create_time']
+		self['lease_ends'] = self.create_time + self.time
+		self.lease_ends = self['lease_ends']
+
+	def update_ip(self, ip):
+		self['ip'] = ip
+		self.ip = self['ip']
+		self.in_use()
+		self.update_create_time()
+
+	def in_use(self, value=True):
+		self['active'] = value
+		self.active = value
+
+class Leases(dict):
+	def __init__(self, ip_range, **keyword_args):
+		dict.__init__(self, keyword_args)
+		self.__range = ip_range
+		self.range_int = self.__calculate_range()
+		self.max_range_int_id = len(self.range_int) - 1
+		self.current_range_int_id = 0
+		self.used_ip_list = []
+
+
+	def __calculate_range(self):
+		range_from = self.__calculate_ip_string_to_int(self.__range[0])
+		range_to = self.__calculate_ip_string_to_int(self.__range[1])
+		if range_from >= range_to:
+			raise DHCPRangeError()
+
+		return self.__generate_ip_range_int(range_from, range_to)
+
+	def __calculate_ip_string_to_int(self, ip_string):
+		ip_list = ip_string.split('.')
+		ip_list = [ int(ip_list[0]), int(ip_list[1]), int(ip_list[2]), int(ip_list[3]) ]
+		ip = 0
+		ip += ip_list[0] * 16777216
+		ip += ip_list[1] * 65536
+		ip += ip_list[2] * 256
+		ip += ip_list[3]
+		return ip
+
+	def __calculate_ip_int_to_string(self, ip):
+		ip_hex = hex(ip)
+		ip_hex = ip_hex[2:].rjust(8,'0')
+		ip_0 = int(ip_hex[:2].rjust(2,'0'), 16)
+		ip_1 = int(ip_hex[2:4].rjust(2,'0'), 16)
+		ip_2 = int(ip_hex[4:6].rjust(2,'0'), 16)
+		ip_3 = int(ip_hex[6:8].rjust(2,'0'), 16)
+		ip_list = [str(ip_0), str(ip_1), str(ip_2), str(ip_3)]
+		ip_string = '.'.join(ip_list)
+		return ip_string
+
+	def __generate_ip_range_int(self, from_ip, to_ip):
+		ip_range_int_list = []
+		for ip_int in xrange(from_ip, to_ip + 1):
+			ip_range_int_list.append(ip_int)
+		return ip_range_int_list
+
+	def create(self, mac, ip=False):
+		if not self.__exists_lease(mac):
+			if ip == False:
+				ip = self.__get_ip()
+			if ip == False:
+				return False
+
+			if not self.__is_ip_in_range(ip):
+				return False
+
+			if not self.__is_ip_in_use(ip):
+				self[mac] = Lease(mac=mac, ip=ip)
+				self.used_ip_list.append(ip)
+				return ip
+		return False
+
+	def __exists_lease(self, mac):
+		return mac in self.keys()
+
+	def __is_ip_in_use(self, ip):
+		return ip in self.used_ip_list
+
+	def __is_ip_in_range(self, ip):
+		ip = self.__calculate_ip_string_to_int(ip)
+		if ip >= self.range_int[0] and ip <= self.range_int[-1]:
+			return True
+		return False
+
+	def update_ip(self, mac, ip):
+		self[mac].update_ip(ip)
+
+	def __get_ip(self):
+		for ip in self.range_int:
+			ip = self.__calculate_ip_int_to_string(ip)
+			if not self.__is_ip_in_use(ip):
+				return ip
+		return False
+
+	def get_ip(self, mac):
+		try:
+			return self[mac]['ip']
+		except KeyError:
+			return False
+
+
+
+
+
+
+
+range = ['192.168.0.3','192.168.0.6']
+l = Leases(range)
+
+print l.create('aa:aa:aa:aa:aa:aa','192.168.0.5')
+for mac in xrange(5):
+	print mac, l.create(mac)
+
+import json
+print json.dumps(l, indent=4)
+
+exit()
+
+
+
+
 
 class DHCP_Server(object):
 	def __init__(self, interface, server_ip, netmask):
@@ -388,8 +541,8 @@ class DHCP_Server(object):
 		self.gateway = server_ip
 		self.dns = ['8.8.8.8', '8.8.4.4']
 		self.range = ['10.10.50.1','10.10.50.9']
-		self.lease_time = 60
-
+		self.lease_time = 86400
+		self.leases = {}
 
 
 
