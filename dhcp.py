@@ -57,6 +57,7 @@ class Packet(object):
 		self.magic_cookie = self.read_magic_cookie(data)
 
 
+
 		for option in self.get_dhcp_options_raw(data):
 
 			if option[0] == self.Option_Type.HOSTNAME:
