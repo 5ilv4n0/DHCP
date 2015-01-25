@@ -4,7 +4,7 @@
 import socket, binascii, time, IN
 from json import dumps
 from sys import exit
-from optparse import OptionParser
+
 
 
 def packet_raw_output(string, hx=True):
@@ -482,6 +482,9 @@ class Leases(dict):
 				self[mac] = Lease(mac=mac, ip=ip, hostname=hostname)
 				self.used_ip_list.append(ip)
 				return ip
+		else:
+			return self.get_ip(mac)
+
 		return False
 
 	def __exists_lease(self, mac):
@@ -539,6 +542,7 @@ class DHCP_Server(object):
 		self.range = ['10.10.50.1','10.10.50.9']
 		self.default_lease_time = 86400
 		self.leases = Leases(self.range)
+		self.discoveries = []
 
 
 
@@ -568,17 +572,31 @@ class DHCP_Server(object):
 				packet = DHCP_Packet(message)
 
 				if packet.is_dhcp_discovery(): #############################DHCPDiscover
+					self.discoveries.append(packet.client_hw_address)
 					ip_address = self.leases.create(packet.client_hw_address)
 					data = packet.generate_dhcp_paket(Message_Type.DHCPOffer, ip_address, self.server_ip)
 					if data:
 						s.sendto(data,('<broadcast>',68)) ##################DHCPOffer
 
 				elif packet.is_dhcp_request(): #############################DHCPRequest
-					data = packet.generate_dhcp_paket(Message_Type.DHCPAck, ip_address, self.server_ip)
-					if data:
-						s.sendto(data,('<broadcast>',68)) ##################DHCPAck
-					print 'LEASED:', ip_address
+					if packet.client_hw_address in self.discoveries:
+						data = packet.generate_dhcp_paket(Message_Type.DHCPAck, self.leases[packet.client_hw_address]['ip'], self.server_ip)
+						if data:
+							s.sendto(data,('<broadcast>',68)) ##################DHCPAck
+							print 'LEASED:', ip_address
+							delete_discovery_index = self.discoveries.index(packet.client_hw_address)
+							del self.discoveries[delete_discovery_index]
+					else:
 
+						if not packet.client_hw_address in self.leases.keys():
+							data = packet.generate_dhcp_paket(Message_Type.DHCPNak, packet.requested_ip, self.server_ip)
+							if data:
+								s.sendto(data,('<broadcast>',68)) ##################DHCPNack
+						else:
+							data = packet.generate_dhcp_paket(Message_Type.DHCPAck, self.leases[packet.client_hw_address]['ip'], self.server_ip)
+							if data:
+								s.sendto(data,('<broadcast>',68)) ##################DHCPAck
+								print 'LEASED:', ip_address
 
 			except KeyboardInterrupt:
 				exit()
