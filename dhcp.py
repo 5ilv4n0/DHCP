@@ -9,8 +9,33 @@ from sys import exit
 from optparse import OptionParser
 import json
 
+def packet_raw_output(string, hx=True):
+	if hx:
+		hx=0
+	else:
+		hx=1
+
+	print '+-----------------'+ '-'*(4*hx) +'+'
+	raw_data = []
+	for char in string:
+		raw_data.append( (hex(ord(char))[2:].rjust(2,'0'), str(ord(char)).rjust(3,'0')) )
+		c = 0
+	for id, dat in enumerate(raw_data):
+		if c == 0:
+			print '|'+ str(id).rjust(3,'0')+'|',
+		print dat[hx],
+		c += 1
+		if c == 4:
+			c=0
+			print '|'
+	print
+	print '+-----------------'+ '-'*(4*hx) +'+'
 
 
+
+packet_raw_output('Hallo Spencer 10.10.0.1')
+packet_raw_output('Hallo Spencer 10.10.0.1', False)
+sys.exit()
 
 class Packet(object):
 
@@ -133,18 +158,7 @@ class Packet(object):
 
 
 
-		# self.raw_data = []
-		# for char in self.data:
-		# 	self.raw_data.append( hex(ord(char))[2:].rjust(2,'0')+'[' + str(ord(char)).rjust(3,'0') + ']' )
-		# c = 0
-		# for id, d in enumerate(self.raw_data):
-		# 	if c == 0:
-		# 		print str(id).rjust(3,'0')+': ',
-		# 	print d,
-		# 	c += 1
-		# 	if c == 4:
-		# 		c=0
-		# 		print
+
 
 
 
