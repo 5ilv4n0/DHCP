@@ -4,7 +4,7 @@
 #psychomario - https://github.com/psychomario
 
 import socket, binascii, time, IN
-
+from json import dumps
 from sys import exit
 from optparse import OptionParser
 
@@ -372,21 +372,17 @@ class DHCP_Packet(object):
 				break
 		return hw
 
-
-
-
-
-
-
 class DHCPRangeError(Exception):
 	pass
-
-
 
 class Lease(dict):
 	def __init__(self, **keyword_args):
 		dict.__init__(self, keyword_args)
 		self.in_use()
+
+		if not 'hostname' in self.keys():
+			self['hostname'] = None
+			self.hostname = self['hostname']
 
 		if not 'mac' in self.keys():
 			self['mac'] = '00:00:00:00:00:00'
@@ -420,6 +416,9 @@ class Lease(dict):
 	def in_use(self, value=True):
 		self['active'] = value
 		self.active = value
+
+	def __str__(self):
+		return dumps(self, indent=4)
 
 class Leases(dict):
 	def __init__(self, ip_range, **keyword_args):
@@ -466,7 +465,12 @@ class Leases(dict):
 			ip_range_int_list.append(ip_int)
 		return ip_range_int_list
 
-	def create(self, mac, ip=False):
+	def create(self, mac, ip=False, **keyword_arg):
+		if not 'hostname' in keyword_arg.keys():
+			hostname = None
+		else:
+			hostname = keyword_arg['hostname']
+
 		if not self.__exists_lease(mac):
 			if ip == False:
 				ip = self.__get_ip()
@@ -477,7 +481,7 @@ class Leases(dict):
 				return False
 
 			if not self.__is_ip_in_use(ip):
-				self[mac] = Lease(mac=mac, ip=ip)
+				self[mac] = Lease(mac=mac, ip=ip, hostname=hostname)
 				self.used_ip_list.append(ip)
 				return ip
 		return False
@@ -510,27 +514,20 @@ class Leases(dict):
 		except KeyError:
 			return False
 
+	def resolv_ip(self, ip):
+		for lease_key in self.keys():
+			if self[lease_key]['ip'] == ip:
+				return lease_key
 
-
-
-
-
-
-range = ['192.168.0.3','192.168.0.6']
-l = Leases(range)
-
-print l.create('aa:aa:aa:aa:aa:aa','192.168.0.5')
-for mac in xrange(5):
-	print mac, l.create(mac)
-
-import json
-print json.dumps(l, indent=4)
-
-exit()
-
-
-
-
+	def delete(self, ip):
+		try:
+			ip_index = self.used_ip_list.index(ip)
+		except ValueError:
+			return False
+		mac = self.resolv_ip(ip)
+		del self[mac]
+		del self.used_ip_list[ip_index]
+		return True
 
 class DHCP_Server(object):
 	def __init__(self, interface, server_ip, netmask):
@@ -541,8 +538,42 @@ class DHCP_Server(object):
 		self.gateway = server_ip
 		self.dns = ['8.8.8.8', '8.8.4.4']
 		self.range = ['10.10.50.1','10.10.50.9']
-		self.lease_time = 86400
-		self.leases = {}
+		self.default_lease_time = 86400
+		self.leases = Leases(self.range)
+
+
+
+	def run(self):
+		if not hasattr(IN, 'SO_BINDTODEVICE'):
+			IN.SO_BINDTODEVICE = 25  #http://stackoverflow.com/a/8437870/541038
+
+		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		s.setsockopt(socket.SOL_SOCKET,IN.SO_BINDTODEVICE, self.interface+'\0') #experimental
+		s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+		s.bind(('', self.port))
+
+
+		while True:
+			try:
+				message, addressf = s.recvfrom(8192)
+				packet = DHCP_Packet(message)
+
+				if packet.is_dhcp_discovery(): #############################DHCPDiscover
+					ip_address = self.leases.create(packet.client_hw_address)
+					data = packet.generate_dhcp_paket(Message_Type.DHCPOffer, ip_address, self.server_ip)
+					if data:
+						s.sendto(data,('<broadcast>',68)) ##################DHCPOffer
+
+				elif packet.is_dhcp_request(): #############################DHCPRequest
+					data = packet.generate_dhcp_paket(Message_Type.DHCPAck, ip_address, self.server_ip)
+					if data:
+						s.sendto(data,('<broadcast>',68)) ##################DHCPAck
+					print 'LEASED:', ip_address
+
+
+			except KeyboardInterrupt:
+				exit()
 
 
 
@@ -550,50 +581,11 @@ class DHCP_Server(object):
 
 
 
-if not hasattr(IN, 'SO_BINDTODEVICE'):
-	IN.SO_BINDTODEVICE = 25  #http://stackoverflow.com/a/8437870/541038
+dhcp = DHCP_Server('wlan0','10.10.10.2','255.255.0.0')
+dhcp.run()
 
 
 
-interface = 'wlan0'
-port = 67
-server_ip = '10.10.10.2'
-netmask = '255.255.0.0'
-gateway = '10.10.0.1'
-dns = '8.8.8.8'
-range_from = '10.10.50.1'
-range_to = '10.10.50.254'
-lease_time = 60
 
 
-
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.setsockopt(socket.SOL_SOCKET,IN.SO_BINDTODEVICE, interface+'\0') #experimental
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-s.bind(('',port))
-
-
-while True:
-	try:
-		message, addressf = s.recvfrom(8192)
-
-		packet = DHCP_Packet(message)
-
-		if packet.is_dhcp_discovery():
-			data = packet.generate_dhcp_paket(Message_Type.DHCPOffer, range_from,server_ip)
-			if data:
-				s.sendto(data,('<broadcast>',68))
-
-		elif packet.is_dhcp_request():
-			data = packet.generate_dhcp_paket(Message_Type.DHCPAck, range_from,server_ip)
-			if data:
-				s.sendto(data,('<broadcast>',68))
-			print 'LEASED:', range_from
-
-
-        #release() #update releases table
-	except KeyboardInterrupt:
-		exit()
-#    except:
-#        continue
+exit()
