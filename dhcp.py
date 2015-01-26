@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import socket, binascii, time, IN
+import socket, binascii, time, IN, thread
 from json import dumps
 from sys import exit
 
@@ -31,6 +31,7 @@ def packet_raw_output(string, hx=True):
 
 
 class Option_Type:
+	PAD						= 0
 	SUBNET_MASK				= 1
 	ROUTER					= 3
 	DNS_SERVER				= 6
@@ -48,6 +49,7 @@ class Option_Type:
 	RENEW_TIME_VALUE		= 58
 	REBINDING_TIME_VALUE	= 59
 	CLASS_ID				= 60
+	END						= 255
 
 class Message_Type:
 	DHCPDiscover 	= 1
@@ -66,6 +68,7 @@ class DHCP_Packet(object):
 
 
 	OPTION_TYPE = {
+		0: 'PAD',
 		1: 'SUBNET_MASK',
 		3: 'ROUTER',
 		6: 'DNS_SERVER',
@@ -82,7 +85,8 @@ class DHCP_Packet(object):
 		57: 'MAX_MSG_SIZE',
 		58: 'RENEW_TIME_VALUE',
 		59: 'REBINDING_TIME_VALUE',
-		60: 'CLASS_ID'
+		60: 'CLASS_ID',
+		255:'END'
 	}
 
 	MSG_TYPE = {
@@ -139,6 +143,13 @@ class DHCP_Packet(object):
 
 			elif option[0] == Option_Type.SERVER_ID:
 				self.requested_Server_ip = self.read_requested_ip(option)
+
+			elif option[0] == Option_Type.END:
+				pass
+
+			elif option[0] == Option_Type.PAD: #####NOT IMPLENTED = read_pad()
+				self.pad = 0
+
 
 			else:
 				print 'NOT KNOWN YET: ', option
@@ -254,7 +265,7 @@ class DHCP_Packet(object):
 		self.server_ip = server_ip
 		self.dhcp_message_type = message_type
 
-		lease_time = 3600
+		lease_time = 60
 		lease_time_bytes = binascii.unhexlify(hex(lease_time)[2:].rjust(8,'0'))
 		lease_time_option_list = []
 		for char in lease_time_bytes:
@@ -394,7 +405,8 @@ class Lease(dict):
 
 		if not 'time' in self.keys():
 			self['time'] = 86400
-			self.time = self['time']
+		self.time = self['time']
+
 
 		self.update_create_time()
 
@@ -469,6 +481,11 @@ class Leases(dict):
 		else:
 			hostname = keyword_arg['hostname']
 
+		if not 'time' in keyword_arg.keys():
+			lease_time = 3600
+		else:
+			lease_time = keyword_arg['time']
+
 		if not self.__exists_lease(mac):
 			if ip == False:
 				ip = self.__get_ip()
@@ -479,9 +496,9 @@ class Leases(dict):
 				return False
 
 			if not self.__is_ip_in_use(ip):
-				self[mac] = Lease(mac=mac, ip=ip, hostname=hostname)
+				self[mac] = Lease(mac=mac, ip=ip, hostname=hostname, time=lease_time)
 				self.used_ip_list.append(ip)
-				return ip
+				return self[mac]
 		else:
 			return self.get_ip(mac)
 
@@ -489,6 +506,11 @@ class Leases(dict):
 
 	def __exists_lease(self, mac):
 		return mac in self.keys()
+
+	def exists_lease(self, mac):
+		if mac in self.keys():
+			return self[mac]
+		return False
 
 	def __is_ip_in_use(self, ip):
 		return ip in self.used_ip_list
@@ -540,14 +562,30 @@ class DHCP_Server(object):
 		self.gateway = server_ip
 		self.dns = ['8.8.8.8', '8.8.4.4']
 		self.range = ['10.10.50.1','10.10.50.9']
-		self.default_lease_time = 86400
+		self.default_lease_time = 60
 		self.leases = Leases(self.range)
 		self.discoveries = []
-
+		self.check_thread = thread.start_new_thread(self.delete_expired_leases ,(True,))
 
 
 		print self.interface, self.mtu
 
+
+
+
+	def delete_expired_leases(self, v):
+		while True:
+			for mac in self.leases.keys():
+				current_time = int(time.time())
+				print self.leases.used_ip_list
+				if current_time >= self.leases[mac]['lease_ends'] - 2:
+					ip_id = self.leases.used_ip_list.index(self.leases[mac]['ip'])
+					del self.leases.used_ip_list[ip_id]
+					del self.leases[mac]
+					print mac, 'deleted.'
+					break
+
+			time.sleep(1)
 
 
 	def __get_mtu(self):
@@ -570,48 +608,58 @@ class DHCP_Server(object):
 			try:
 				message, addressf = s.recvfrom(8192)
 				packet = DHCP_Packet(message)
+				mac_address = packet.client_hw_address
 
 				if packet.is_dhcp_discovery(): #############################DHCPDiscover
-					self.discoveries.append(packet.client_hw_address)
-					ip_address = self.leases.create(packet.client_hw_address)
-					data = packet.generate_dhcp_paket(Message_Type.DHCPOffer, ip_address, self.server_ip)
-					if data:
-						s.sendto(data,('<broadcast>',68)) ##################DHCPOffer
-
-				elif packet.is_dhcp_request(): #############################DHCPRequest
-					if packet.client_hw_address in self.discoveries:
-						data = packet.generate_dhcp_paket(Message_Type.DHCPAck, self.leases[packet.client_hw_address]['ip'], self.server_ip)
-						if data:
-							s.sendto(data,('<broadcast>',68)) ##################DHCPAck
-							print 'LEASED:', ip_address
-							delete_discovery_index = self.discoveries.index(packet.client_hw_address)
-							del self.discoveries[delete_discovery_index]
+					lease = self.leases.exists_lease(mac_address)
+					if lease == False:
+						lease = self.leases.create(mac_address, time=self.default_lease_time)
+						if lease == False:
+							self.send_Nak(s, packet)
 					else:
+						self.send_Offer(s, packet, lease['ip'])
+				elif packet.is_dhcp_request():
+					lease = self.leases.exists_lease(mac_address)
+					if lease == False:
+						self.send_Nak(s, packet)
+					else:
+						self.send_Ack(s, packet, lease['ip'])
+						print 'LEASED:', lease['ip']
 
-						if not packet.client_hw_address in self.leases.keys():
-							data = packet.generate_dhcp_paket(Message_Type.DHCPNak, packet.requested_ip, self.server_ip)
-							if data:
-								s.sendto(data,('<broadcast>',68)) ##################DHCPNack
-						else:
-							data = packet.generate_dhcp_paket(Message_Type.DHCPAck, self.leases[packet.client_hw_address]['ip'], self.server_ip)
-							if data:
-								s.sendto(data,('<broadcast>',68)) ##################DHCPAck
-								print 'LEASED:', ip_address
 
 			except KeyboardInterrupt:
 				exit()
 
 
 
+	def send_Nak(self, s, packet):
+		data = packet.generate_dhcp_paket(Message_Type.DHCPNak, '0.0.0.0', self.server_ip)
+		if data:
+			s.sendto(data,('<broadcast>',68)) ##################DHCPNack
+			return True
+		return False
+
+	def send_Offer(self, s, packet, ip_address):
+		data = packet.generate_dhcp_paket(Message_Type.DHCPOffer, ip_address, self.server_ip)
+		if data:
+			s.sendto(data,('<broadcast>',68)) ##################DHCPNack
+			return True
+		return False
+
+	def send_Ack(self, s, packet, ip_address):
+		data = packet.generate_dhcp_paket(Message_Type.DHCPAck, ip_address, self.server_ip)
+		if data:
+			s.sendto(data,('<broadcast>',68)) ##################DHCPNack
+			return True
+		return False
+
+
+
+#dhcp = DHCP_Server('wlan0','10.10.10.2','255.255.0.0')
+#dhcp.run()
 
 
 
 
-dhcp = DHCP_Server('wlan0','10.10.10.2','255.255.0.0')
-dhcp.run()
 
-
-
-
-
-exit()
+#exit()
