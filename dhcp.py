@@ -40,6 +40,7 @@ class Option_Type:
 	MTU						= 26
 	BROADCAST				= 28
 	STATIC_ROUTING_TABLE 	= 33
+	NTP_SERVER				= 42
 	REQUESTED_IP			= 50
 	IP_LEASE_TIME			= 51
 	MSG_TYPE 				= 53
@@ -77,6 +78,7 @@ class DHCP_Packet(object):
 		26: 'MTU',
 		28: 'BROADCAST',
 		33: 'STATIC_ROUTING_TABLE',
+		42: 'NTP_SERVER',
 		50: 'REQUESTED_IP',
 		51: 'IP_LEASE_TIME',
 		53: 'MSG_TYPE',
@@ -298,6 +300,12 @@ class DHCP_Packet(object):
 			host_name_option_list.append(ord(char))
 		host_name_option = (12,host_name_option_list)
 
+		ntp_server = 'de.pool.ntp.org'
+		ntp_server_option_list = []
+		for char in ntp_server:
+			ntp_server_option_list.append(ord(char))
+		ntp_sevrer_option = (42,ntp_server_option_list)
+
 
 		options = [
 			(53,[self.dhcp_message_type]),
@@ -306,6 +314,7 @@ class DHCP_Packet(object):
 			(28,[10,10,255,255]),
 			(3,[10,10,0,1]),
 			(6,[8,8,8,8,8,8,4,4]),
+			ntp_sevrer_option,
 			domain_name_option,
 			host_name_option,
 			lease_time_option,
@@ -561,16 +570,12 @@ class DHCP_Server(object):
 		self.netmask = netmask
 		self.gateway = server_ip
 		self.dns = ['8.8.8.8', '8.8.4.4']
+		self.ntp = 'de.pool.ntp.org'
 		self.range = ['10.10.50.1','10.10.50.9']
 		self.default_lease_time = 60
 		self.leases = Leases(self.range)
 		self.discoveries = []
 		self.check_thread = thread.start_new_thread(self.delete_expired_leases ,(True,))
-
-
-		print self.interface, self.mtu
-
-
 
 
 	def delete_expired_leases(self, v):
@@ -586,7 +591,6 @@ class DHCP_Server(object):
 					break
 
 			time.sleep(1)
-
 
 	def __get_mtu(self):
 		with open('/sys/class/net/'+self.interface+'/mtu') as mtu:

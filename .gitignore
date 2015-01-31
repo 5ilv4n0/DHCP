@@ -1,3 +1,7 @@
 # Compiled source #
 ###################
 *.pyc
+
+# Config files #
+################
+*.conf
