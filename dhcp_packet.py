@@ -1,5 +1,6 @@
 from time import time
 from json import dumps
+
 class ToolBox(object):
     def ip_to_int(self, ip_string):
         ip_list = ip_string.split('.')
@@ -53,92 +54,84 @@ Tools = ToolBox()
 
 
 
-class Option_Type:
-	PAD						= 0
-	SUBNET_MASK				= 1
-	ROUTER					= 3
-	DNS_SERVER				= 6
-	HOSTNAME 				= 12
-	DOMAIN_NAME				= 15
-	MTU						= 26
-	BROADCAST				= 28
-	STATIC_ROUTING_TABLE 	= 33
-	NTP_SERVER				= 42
-	REQUESTED_IP			= 50
-	IP_LEASE_TIME			= 51
-	OPTION_OVERLOAD         = 52
-	MSG_TYPE 				= 53
-	SERVER_ID				= 54
-	PARAM_LIST				= 55
-	MAX_MSG_SIZE 			= 57
-	RENEW_TIME_VALUE		= 58
-	REBINDING_TIME_VALUE	= 59
-	CLASS_ID				= 60
-	END						= 255
-
-class Message_Type:
-	DHCPDiscover 	= 1
-	DHCPOffer 		= 2
-	DHCPRequest		= 3
-	DHCPDecline		= 4
-	DHCPAck			= 5
-	DHCPNak			= 6
-	DHCPRelease 	= 7
-	DHCPInform		= 8
-
-class Packet_Type:
-    RESPONSE = 1
-    REPLY = 2
-
-
-
 
 class DHCP_Packet_Options(list):
-    PAD						= 0
-    SUBNET_MASK				= 1
-    TIME_OFFSET             = 2
-    ROUTER					= 3
-    TIME_SERVER             = 4
-    NAME_SERVER             = 5
-    DNS_SERVER				= 6
-    LOG_SERVER              = 7
-    QUOTE_SERVER            = 8
-    LPR_SERVER              = 9
-    IMPRESS_SERVER          = 10
-    RES_LOC_SERVER          = 11
-    HOSTNAME 				= 12
-    BOOT_FILE_SIZE          = 13
-    MERIT_DUMP_FILE         = 14
-    DOMAIN_NAME				= 15
-    SWAP_SERVER             = 16
-    ROOT_PATH               = 17
-    EXT_PATH                = 18
-    IP_FORWARD              = 19
-    NON_LOC_SOURCE_ROUTING  = 20
-    POLICY_FILTER           = 21
-    MAX_DATA_REAS_SIZE      = 22
-    DEFAULT_IP_TTL          = 23
-    PATH_MTU_AGING_TIMEOUT  = 24
-    PATH_MTU_PLATEAU_TABLE  = 25
-    MTU						= 26
-    ALL_SUBNETS_LOCAL       = 27
-    BROADCAST				= 28
-    PERFORM_MASK_DISCOVERY  = 29
-    MARK_SUPPLIER           = 30
-    PERFORM_ROUTER_DISCOVERY= 31
-    STATIC_ROUTING_TABLE 	= 33
-    NTP_SERVER				= 42
-    REQUESTED_IP			= 50
-    IP_LEASE_TIME			= 51
-    OPTION_OVERLOAD         = 52
-    MESSAGE_TYPE 			= 53
-    SERVER_ID				= 54
-    PARAMETER_LIST			= 55
-    MAX_MESSAGE_SIZE		= 57
-    RENEW_TIME_VALUE		= 58
-    REBINDING_TIME_VALUE	= 59
-    CLASS_ID				= 60
-    END						= 255
+    PAD						    = 0
+    SUBNET_MASK				    = 1
+    TIME_OFFSET                 = 2
+    ROUTER			   	       	= 3
+    TIME_SERVER                 = 4
+    NAME_SERVER                 = 5
+    DNS_SERVER		    		= 6
+    LOG_SERVER                  = 7
+    QUOTE_SERVER                = 8
+    LPR_SERVER                  = 9
+    IMPRESS_SERVER              = 10
+    RES_LOC_SERVER              = 11
+    HOSTNAME 		 		    = 12
+    BOOT_FILE_SIZE              = 13
+    MERIT_DUMP_FILE             = 14
+    DOMAIN_NAME				    = 15
+    SWAP_SERVER                 = 16
+    ROOT_PATH                   = 17
+    EXT_PATH                    = 18
+    IP_FORWARD                  = 19
+    NON_LOC_SOURCE_ROUTING      = 20
+    POLICY_FILTER               = 21
+    MAX_DATA_REAS_SIZE          = 22
+    DEFAULT_IP_TTL              = 23
+    PATH_MTU_AGING_TIMEOUT      = 24
+    PATH_MTU_PLATEAU_TABLE      = 25
+    MTU						    = 26
+    ALL_SUBNETS_LOCAL           = 27
+    BROADCAST				    = 28
+    PERFORM_MASK_DISCOVERY      = 29
+    MARK_SUPPLIER               = 30
+    PERFORM_ROUTER_DISCOVERY    = 31
+    ROUTER_SOLIC_ADDRESS        = 32
+    STATIC_ROUTING_TABLE 	    = 33
+    TRAILER_ENCAPSULATION       = 34
+    ARP_CACHE_TIMEOUT           = 35
+    ETHERNET_ENCAPSULATION      = 36
+    TCP_DEFAULT_TTL             = 37
+    TCP_KEEPALIVE_INTERVAL      = 38
+    TCP_KEEPALIVE_GARBAGE       = 39
+    NETWORK_INFO_SERVICE_DOMAIN = 40
+    NETWORK_INFO_SERVERS        = 41
+    NTP_SERVERS                 = 42
+    VENDOR_SPECIFIC_INFORMATION = 43 #NOT FULLY IMPLEMENTED!
+    NETBIOS_TCP_IP_NAME_SERVERS = 44
+    NETBIOS_TCP_IP_DD_SERVERS   = 45
+    NETBIOS_TCP_IP_NODE_TYPE    = 46
+    NETBIOS_TCP_IP_SCOPE        = 47
+    XWINDOW_SYSTEM_FONT_SERVERS = 48
+    DHCP_OPT_BOOTP_VENDOR_EXTENTIONS = 49
+    REQUESTED_IP		      	= 50
+    IP_LEASE_TIME	      		= 51
+    OPTION_OVERLOAD             = 52
+    MESSAGE_TYPE 			    = 53
+    SERVER_ID                   = 54
+    PARAMETER_LIST              = 55
+    MESSAGE                     = 56
+    MAX_MESSAGE_SIZE            = 57
+    RENEWAL_T1_TIME_VALUE       = 58
+    REBINDING_T2_TIME_VALUE     = 59
+    CLASS_ID                    = 60
+    CLIENT_ID                   = 61
+    NET_INFO_SERVICE_PLUS_DOMAIN = 64
+    NET_INFO_SERVICE_PLUS_SERVERS = 65
+    TFTP_SERVER_NAME            = 66
+    BOOTFILE_NAME               = 67
+    MOBILE_IP_HOME_AGENT        = 68
+    SMTP_SERVERS                = 69
+    POP3_SERVERS                = 70
+    NNTP_SERVERS                = 71
+    DEFAULT_WWW_SERVERS         = 72
+    DEFAULT_FINGER_SERVERS      = 73
+    DEFAULT_IRC_SERVERS         = 74
+    STREETTALK_SERVERS          = 75
+    STREETTALK_DA_SERVERS       = 76
+    END                         = 255
 
     OPTION_NAME = {
         0:  'PAD',
@@ -173,46 +166,58 @@ class DHCP_Packet_Options(list):
         29: 'PERFORM_MASK_DISCOVERY',
         30: 'MARK_SUPPLIER',
         31: 'PERFORM_ROUTER_DISCOVERY',
+        32: 'ROUTER_SOLIC_ADDRESS',
     	33: 'STATIC_ROUTING_TABLE',
-    	42: 'NTP_SERVER',
+        34: 'TRAILER_ENCAPSULATION',
+        35: 'ARP_CACHE_TIMEOUT',
+        36: 'ETHERNET_ENCAPSULATION',
+        37: 'TCP_DEFAULT_TTL',
+        38: 'TCP_KEEPALIVE_INTERVAL',
+        39: 'TCP_KEEPALIVE_GARBAGE',
+        40: 'NETWORK_INFO_SERVICE_DOMAIN',
+        41: 'NETWORK_INFO_SERVERS',
+    	42: 'NTP_SERVERS',
+        43: 'VENDOR_SPECIFIC_INFORMATION',
+        44: 'NETBIOS_TCP_IP_NAME_SERVERS',
+        45: 'NETBIOS_TCP_IP_DD_SERVERS',
+        46: 'NETBIOS_TCP_IP_NODE_TYPE',
+        47: 'NETBIOS_TCP_IP_SCOPE',
+        48: 'XWINDOW_SYSTEM_FONT_SERVERS',
+        49: 'DHCP_OPT_BOOTP_VENDOR_EXTENTIONS',
     	50: 'REQUESTED_IP',
     	51: 'IP_LEASE_TIME',
     	52: 'OPTION_OVERLOAD',
     	53: 'MESSAGE_TYPE',
     	54: 'SERVER_ID',
     	55: 'PARAMETER_LIST',
+        56: 'MESSAGE',
     	57: 'MAX_MESSAGE_SIZE',
-    	58: 'RENEW_TIME_VALUE',
+    	58: 'RENEWAL_T1_TIME_VALUE',
     	59: 'REBINDING_TIME_VALUE',
     	60: 'CLASS_ID',
+        61: 'CLIENT_ID',
+        64: 'NET_INFO_SERVICE_PLUS_DOMAIN',
+        65: 'NET_INFO_SERVICE_PLUS_SERVERS',
+        66: 'TFTP_SERVER_NAME',
+        67: 'BOOTFILE_NAME',
+        68: 'MOBILE_IP_HOME_AGENT',
+        69: 'SMTP_SERVERS',
+        70: 'POP3_SERVERS',
+        71: 'NNTP_SERVERS',
+        72: 'DEFAULT_WWW_SERVERS',
+        73: 'DEFAULT_FINGER_SERVERS',
+        74: 'DEFAULT_IRC_SERVERS',
+        75: 'STREETTALK_SERVERS',
+        76: 'STREETTALK_DA_SERVERS',
         255:'END'
     }
 
     def __init__(self, packet, offset=240):
-        #for char in packet[240:]:
-        #   self.append(ord(char))
-
-        data = [
-            53,1,1,
-            2,4,1,2,3,4,
-            1,4,255,255,0,0,
-            54,4,10,10,10,2,
-            28,4,10,10,255,255,
-            3,4,10,10,0,1,
-            6,8,8,8,8,8,8,8,4,4,
-            60,4,44,88,3,7,
-            4,4,123,123,232,3,
-            5,4,10,10,0,1,
-            7,4,7,7,7,7,
-            255
-        ]
-        for d in data:
-            self.append(d)
+        for char in packet[240:]:
+           self.append(ord(char))
 
         self.options = self.__read_options()
         print dumps(self.options, indent=4)
-
-
 
     def __read_options(self):
         options = {}
@@ -232,6 +237,8 @@ class DHCP_Packet_Options(list):
                 self.SERVER_ID,
                 self.ROUTER,
                 self.SWAP_SERVER,
+                self.ROUTER_SOLIC_ADDRESS,
+                self.REQUESTED_IP
             ]
             MULTI_IP_OPTIONS = [
                 self.DNS_SERVER,
@@ -242,6 +249,22 @@ class DHCP_Packet_Options(list):
                 self.LPR_SERVER,
                 self.IMPRESS_SERVER,
                 self.RES_LOC_SERVER,
+                self.NETWORK_INFO_SERVERS,
+                self.NTP_SERVERS,
+                self.NETBIOS_TCP_IP_NAME_SERVERS,
+                self.NETBIOS_TCP_IP_DD_SERVERS,
+                self.XWINDOW_SYSTEM_FONT_SERVERS,
+                self.DHCP_OPT_BOOTP_VENDOR_EXTENTIONS,
+                self.NET_INFO_SERVICE_PLUS_SERVERS,
+                self.MOBILE_IP_HOME_AGENT,
+                self.SMTP_SERVERS,
+                self.POP3_SERVERS,
+                self.NNTP_SERVERS,
+                self.DEFAULT_WWW_SERVERS,
+                self.DEFAULT_FINGER_SERVERS,
+                self.DEFAULT_IRC_SERVERS,
+                self.STREETTALK_SERVERS,
+                self.STREETTALK_DA_SERVERS
             ]
             INTEGER_OPTIONS = [
                 self.BOOT_FILE_SIZE,
@@ -249,10 +272,19 @@ class DHCP_Packet_Options(list):
                 self.TIME_OFFSET,
                 self.MAX_DATA_REAS_SIZE,
                 self.PATH_MTU_AGING_TIMEOUT,
+                self.ARP_CACHE_TIMEOUT,
+                self.TCP_KEEPALIVE_INTERVAL,
+                self.IP_LEASE_TIME,
+                self.MAX_MESSAGE_SIZE,
+                self.RENEWAL_T1_TIME_VALUE,
+                self.REBINDING_T2_TIME_VALUE,
             ]
             BYTE_OPTIONS = [
                 self.MESSAGE_TYPE,
                 self.DEFAULT_IP_TTL,
+                self.TCP_DEFAULT_TTL,
+                self.NETBIOS_TCP_IP_NODE_TYPE,
+                self.OPTION_OVERLOAD
             ]
             STRING_OPTIONS = [
                 self.HOSTNAME,
@@ -260,6 +292,13 @@ class DHCP_Packet_Options(list):
                 self.DOMAIN_NAME,
                 self.ROOT_PATH,
                 self.EXT_PATH,
+                self.NETWORK_INFO_SERVICE_DOMAIN,
+                self.VENDOR_SPECIFIC_INFORMATION,
+                self.NETBIOS_TCP_IP_SCOPE,
+                self.NET_INFO_SERVICE_PLUS_DOMAIN,
+                self.TFTP_SERVER_NAME,
+                self.BOOTFILE_NAME,
+                self.MESSAGE
             ]
             BOOLEAN_OPTIONS = [
                 self.IP_FORWARD,
@@ -268,6 +307,14 @@ class DHCP_Packet_Options(list):
                 self.PERFORM_MASK_DISCOVERY,
                 self.MARK_SUPPLIER,
                 self.PERFORM_ROUTER_DISCOVERY,
+                self.TRAILER_ENCAPSULATION,
+                self.ETHERNET_ENCAPSULATION,
+                self.TCP_KEEPALIVE_GARBAGE
+            ]
+            BYTE_LIST_OPTIONS = [
+                self.CLASS_ID,
+                self.PARAMETER_LIST,
+                self.CLIENT_ID
             ]
 
             if option_type in BOOLEAN_OPTIONS:
@@ -283,17 +330,23 @@ class DHCP_Packet_Options(list):
                 option_data = self.__read_byte(option_data)
             if option_type in STRING_OPTIONS:
                 option_data = self.__read_string(option_data)
+            if option_type in BYTE_LIST_OPTIONS:
+                option_data = self.__read_byte_list(option_data)
 
             if option_type == self.POLICY_FILTER:
                 option_data = self.__read_ip_and_masks(option_data)
 
+            if option_type == self.STATIC_ROUTING_TABLE:
+                option_data = self.__read_static_routing_table(option_data)
+
             if option_type == self.PATH_MTU_PLATEAU_TABLE:
                 option_data = self.__read_mtu_plateau_table(option_data)
+
+
 
             options[self.OPTION_NAME[option_type]] = option_data
             offset += 2+option_length
         return options
-
 
     def __read_boolean(self, option_data):
         byte = self.__read_byte(option_data)
@@ -333,6 +386,16 @@ class DHCP_Packet_Options(list):
             outlist.append('/'.join(data))
         return outlist
 
+    def __read_static_routing_table(self, option_data):
+        option_data = self.__read_ips(option_data)
+        set_count = len(option_data) / 2
+        outlist = []
+        for addr_id in range(set_count):
+            data = option_data[addr_id*2:(addr_id*2)+2]
+            print data
+            outlist.append(':'.join(data))
+        return outlist
+
     def __read_mtu_plateau_table(self, option_data):
         set_count = len(option_data) / 2
         outlist = []
@@ -342,17 +405,29 @@ class DHCP_Packet_Options(list):
             outlist.append(data)
         return outlist
 
-
-
-
+    def __read_byte_list(self, option_data): #SENSELESS^^
+        return option_data
 
 class DHCP_Packet(list):
+
+    class Packet_Type:
+        RESPONSE = 1
+        REPLY = 2
+
+    class Message_Type:
+    	DHCPDiscover 	= 1
+    	DHCPOffer 		= 2
+    	DHCPRequest		= 3
+    	DHCPDecline		= 4
+    	DHCPAck			= 5
+    	DHCPNak			= 6
+    	DHCPRelease 	= 7
+    	DHCPInform		= 8
+
     def __init__(self, data):
         for char in data:
             self.append(char)
         self.options = DHCP_Packet_Options(self)
-        print
-        print self.options
 
     @property
     def packet_type(self):
@@ -563,11 +638,5 @@ class DHCP_Packet(list):
     def __str__(self):
         return ''.join(self)
 
-
-from random import randint
-
-data = ''
-for i in range(512):
-    data += chr(randint(0,255))
 
 p = DHCP_Packet(data)

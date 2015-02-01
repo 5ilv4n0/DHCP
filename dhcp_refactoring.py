@@ -3,38 +3,8 @@
 
 from time import time
 from json import dumps
-
-class Option_Type:
-	PAD						= 0
-	SUBNET_MASK				= 1
-	ROUTER					= 3
-	DNS_SERVER				= 6
-	HOSTNAME 				= 12
-	DOMAIN_NAME				= 15
-	MTU						= 26
-	BROADCAST				= 28
-	STATIC_ROUTING_TABLE 	= 33
-	NTP_SERVER				= 42
-	REQUESTED_IP			= 50
-	IP_LEASE_TIME			= 51
-	MSG_TYPE 				= 53
-	SERVER_ID				= 54
-	PARAM_LIST				= 55
-	MAX_MSG_SIZE 			= 57
-	RENEW_TIME_VALUE		= 58
-	REBINDING_TIME_VALUE	= 59
-	CLASS_ID				= 60
-	END						= 255
-
-class Message_Type:
-	DHCPDiscover 	= 1
-	DHCPOffer 		= 2
-	DHCPRequest		= 3
-	DHCPDecline		= 4
-	DHCPAck			= 5
-	DHCPNak			= 6
-	DHCPRelease 	= 7
-	DHCPInform		= 8
+import socket, binascii, IN, thread
+from sys import exit
 
 class DHCPRangeError(Exception):
 	pass
@@ -237,6 +207,14 @@ class Leases(object):
         del self.__used_ip_list[ip_index]
         return True
 
+	@property
+	def mac_addresses(self):
+		return self.__leases.keys()
+
+	@property
+	def leases(self):
+		return self.__leases
+
     def __str__(self):
         out_string = ''
         for mac in self.__leases.keys():
@@ -248,371 +226,622 @@ class Leases(object):
 
 
 
+class DHCP_Packet_Options(list):
+    PAD						    = 0
+    SUBNET_MASK				    = 1
+    TIME_OFFSET                 = 2
+    ROUTER			   	       	= 3
+    TIME_SERVER                 = 4
+    NAME_SERVER                 = 5
+    DNS_SERVER		    		= 6
+    LOG_SERVER                  = 7
+    QUOTE_SERVER                = 8
+    LPR_SERVER                  = 9
+    IMPRESS_SERVER              = 10
+    RES_LOC_SERVER              = 11
+    HOSTNAME 		 		    = 12
+    BOOT_FILE_SIZE              = 13
+    MERIT_DUMP_FILE             = 14
+    DOMAIN_NAME				    = 15
+    SWAP_SERVER                 = 16
+    ROOT_PATH                   = 17
+    EXT_PATH                    = 18
+    IP_FORWARD                  = 19
+    NON_LOC_SOURCE_ROUTING      = 20
+    POLICY_FILTER               = 21
+    MAX_DATA_REAS_SIZE          = 22
+    DEFAULT_IP_TTL              = 23
+    PATH_MTU_AGING_TIMEOUT      = 24
+    PATH_MTU_PLATEAU_TABLE      = 25
+    MTU						    = 26
+    ALL_SUBNETS_LOCAL           = 27
+    BROADCAST				    = 28
+    PERFORM_MASK_DISCOVERY      = 29
+    MARK_SUPPLIER               = 30
+    PERFORM_ROUTER_DISCOVERY    = 31
+    ROUTER_SOLIC_ADDRESS        = 32
+    STATIC_ROUTING_TABLE 	    = 33
+    TRAILER_ENCAPSULATION       = 34
+    ARP_CACHE_TIMEOUT           = 35
+    ETHERNET_ENCAPSULATION      = 36
+    TCP_DEFAULT_TTL             = 37
+    TCP_KEEPALIVE_INTERVAL      = 38
+    TCP_KEEPALIVE_GARBAGE       = 39
+    NETWORK_INFO_SERVICE_DOMAIN = 40
+    NETWORK_INFO_SERVERS        = 41
+    NTP_SERVERS                 = 42
+    VENDOR_SPECIFIC_INFORMATION = 43 #NOT FULLY IMPLEMENTED!
+    NETBIOS_TCP_IP_NAME_SERVERS = 44
+    NETBIOS_TCP_IP_DD_SERVERS   = 45
+    NETBIOS_TCP_IP_NODE_TYPE    = 46
+    NETBIOS_TCP_IP_SCOPE        = 47
+    XWINDOW_SYSTEM_FONT_SERVERS = 48
+    DHCP_OPT_BOOTP_VENDOR_EXTENTIONS = 49
+    REQUESTED_IP		      	= 50
+    IP_LEASE_TIME	      		= 51
+    OPTION_OVERLOAD             = 52
+    MESSAGE_TYPE 			    = 53
+    SERVER_ID                   = 54
+    PARAMETER_LIST              = 55
+    MESSAGE                     = 56
+    MAX_MESSAGE_SIZE            = 57
+    RENEWAL_T1_TIME_VALUE       = 58
+    REBINDING_T2_TIME_VALUE     = 59
+    VENDOR_CLASS_ID             = 60
+    CLIENT_ID                   = 61
+    NET_INFO_SERVICE_PLUS_DOMAIN = 64
+    NET_INFO_SERVICE_PLUS_SERVERS = 65
+    TFTP_SERVER_NAME            = 66
+    BOOTFILE_NAME               = 67
+    MOBILE_IP_HOME_AGENT        = 68
+    SMTP_SERVERS                = 69
+    POP3_SERVERS                = 70
+    NNTP_SERVERS                = 71
+    DEFAULT_WWW_SERVERS         = 72
+    DEFAULT_FINGER_SERVERS      = 73
+    DEFAULT_IRC_SERVERS         = 74
+    STREETTALK_SERVERS          = 75
+    STREETTALK_DA_SERVERS       = 76
+    END                         = 255
+
+    OPTION_NAME = {
+        0:  'PAD',
+        1:  'SUBNET_MASK',
+        2:  'TIME_OFFSET',
+	    3:  'ROUTER',
+        4:  'TIME_SERVER',
+        5:  'NAME_SERVER',
+	    6:  'DNS_SERVER',
+        7:  'LOG_SERVER',
+        8:  'QUOTE_SERVER',
+        9:  'LPR_SERVER',
+        10: 'IMPRESS_SERVER',
+        11: 'RES_LOC_SERVER',
+    	12: 'HOSTNAME',
+        13: 'BOOT_FILE_SIZE',
+        14: 'MERIT_DUMP_FILE',
+    	15: 'DOMAIN_NAME',
+        16: 'SWAP_SERVER',
+        17: 'ROOT_PATH',
+        18: 'EXT_PATH',
+        19: 'IP_FORWARD',
+        20: 'NON_LOC_SOURCE_ROUTING',
+        21: 'POLICY_FILTER',
+        22: 'MAX_DATA_REAS_SIZE',
+        23: 'DEFAULT_IP_TTL',
+        24: 'PATH_MTU_AGING_TIMEOUT',
+        25: 'PATH_MTU_PLATEAU_TABLE',
+    	26: 'MTU',
+        27: 'ALL_SUBNETS_LOCAL',
+    	28: 'BROADCAST',
+        29: 'PERFORM_MASK_DISCOVERY',
+        30: 'MARK_SUPPLIER',
+        31: 'PERFORM_ROUTER_DISCOVERY',
+        32: 'ROUTER_SOLIC_ADDRESS',
+    	33: 'STATIC_ROUTING_TABLE',
+        34: 'TRAILER_ENCAPSULATION',
+        35: 'ARP_CACHE_TIMEOUT',
+        36: 'ETHERNET_ENCAPSULATION',
+        37: 'TCP_DEFAULT_TTL',
+        38: 'TCP_KEEPALIVE_INTERVAL',
+        39: 'TCP_KEEPALIVE_GARBAGE',
+        40: 'NETWORK_INFO_SERVICE_DOMAIN',
+        41: 'NETWORK_INFO_SERVERS',
+    	42: 'NTP_SERVERS',
+        43: 'VENDOR_SPECIFIC_INFORMATION',
+        44: 'NETBIOS_TCP_IP_NAME_SERVERS',
+        45: 'NETBIOS_TCP_IP_DD_SERVERS',
+        46: 'NETBIOS_TCP_IP_NODE_TYPE',
+        47: 'NETBIOS_TCP_IP_SCOPE',
+        48: 'XWINDOW_SYSTEM_FONT_SERVERS',
+        49: 'DHCP_OPT_BOOTP_VENDOR_EXTENTIONS',
+    	50: 'REQUESTED_IP',
+    	51: 'IP_LEASE_TIME',
+    	52: 'OPTION_OVERLOAD',
+    	53: 'MESSAGE_TYPE',
+    	54: 'SERVER_ID',
+    	55: 'PARAMETER_LIST',
+        56: 'MESSAGE',
+    	57: 'MAX_MESSAGE_SIZE',
+    	58: 'RENEWAL_T1_TIME_VALUE',
+    	59: 'REBINDING_TIME_VALUE',
+    	60: 'VENDOR_CLASS_ID',
+        61: 'CLIENT_ID',
+        64: 'NET_INFO_SERVICE_PLUS_DOMAIN',
+        65: 'NET_INFO_SERVICE_PLUS_SERVERS',
+        66: 'TFTP_SERVER_NAME',
+        67: 'BOOTFILE_NAME',
+        68: 'MOBILE_IP_HOME_AGENT',
+        69: 'SMTP_SERVERS',
+        70: 'POP3_SERVERS',
+        71: 'NNTP_SERVERS',
+        72: 'DEFAULT_WWW_SERVERS',
+        73: 'DEFAULT_FINGER_SERVERS',
+        74: 'DEFAULT_IRC_SERVERS',
+        75: 'STREETTALK_SERVERS',
+        76: 'STREETTALK_DA_SERVERS',
+        255:'END'
+    }
+
+    def __init__(self, packet, offset=240):
+        for char in packet[240:]:
+           self.append(ord(char))
+
+        self.options = self.__read_options()
+        print dumps(self.options, indent=4)
+
+    def __read_options(self):
+        options = {}
+        offset=0
+        while True:
+            option_type = self[offset]
+            if option_type == self.END:
+                break
+            option_length = self[offset+1]
+            data_start = offset + 2
+            data_end = offset+2+option_length
+            option_data = self[data_start:data_end]
+
+            SINGLE_IP_OPTIONS = [
+                self.SUBNET_MASK,
+                self.BROADCAST,
+                self.SERVER_ID,
+                self.ROUTER,
+                self.SWAP_SERVER,
+                self.ROUTER_SOLIC_ADDRESS,
+                self.REQUESTED_IP
+            ]
+            MULTI_IP_OPTIONS = [
+                self.DNS_SERVER,
+                self.TIME_SERVER,
+                self.LOG_SERVER,
+                self.NAME_SERVER,
+                self.QUOTE_SERVER,
+                self.LPR_SERVER,
+                self.IMPRESS_SERVER,
+                self.RES_LOC_SERVER,
+                self.NETWORK_INFO_SERVERS,
+                self.NTP_SERVERS,
+                self.NETBIOS_TCP_IP_NAME_SERVERS,
+                self.NETBIOS_TCP_IP_DD_SERVERS,
+                self.XWINDOW_SYSTEM_FONT_SERVERS,
+                self.DHCP_OPT_BOOTP_VENDOR_EXTENTIONS,
+                self.NET_INFO_SERVICE_PLUS_SERVERS,
+                self.MOBILE_IP_HOME_AGENT,
+                self.SMTP_SERVERS,
+                self.POP3_SERVERS,
+                self.NNTP_SERVERS,
+                self.DEFAULT_WWW_SERVERS,
+                self.DEFAULT_FINGER_SERVERS,
+                self.DEFAULT_IRC_SERVERS,
+                self.STREETTALK_SERVERS,
+                self.STREETTALK_DA_SERVERS
+            ]
+            INTEGER_OPTIONS = [
+                self.BOOT_FILE_SIZE,
+                self.TIME_OFFSET,
+                self.MAX_DATA_REAS_SIZE,
+                self.PATH_MTU_AGING_TIMEOUT,
+                self.ARP_CACHE_TIMEOUT,
+                self.TCP_KEEPALIVE_INTERVAL,
+                self.IP_LEASE_TIME,
+                self.MAX_MESSAGE_SIZE,
+                self.RENEWAL_T1_TIME_VALUE,
+                self.REBINDING_T2_TIME_VALUE,
+            ]
+            BYTE_OPTIONS = [
+                self.MESSAGE_TYPE,
+                self.DEFAULT_IP_TTL,
+                self.TCP_DEFAULT_TTL,
+                self.NETBIOS_TCP_IP_NODE_TYPE,
+                self.OPTION_OVERLOAD
+            ]
+            STRING_OPTIONS = [
+                self.HOSTNAME,
+                self.MERIT_DUMP_FILE,
+                self.DOMAIN_NAME,
+                self.ROOT_PATH,
+                self.EXT_PATH,
+                self.NETWORK_INFO_SERVICE_DOMAIN,
+                self.VENDOR_SPECIFIC_INFORMATION,
+                self.NETBIOS_TCP_IP_SCOPE,
+                self.NET_INFO_SERVICE_PLUS_DOMAIN,
+                self.TFTP_SERVER_NAME,
+                self.BOOTFILE_NAME,
+                self.MESSAGE
+            ]
+            BOOLEAN_OPTIONS = [
+                self.IP_FORWARD,
+                self.NON_LOC_SOURCE_ROUTING,
+                self.ALL_SUBNETS_LOCAL,
+                self.PERFORM_MASK_DISCOVERY,
+                self.MARK_SUPPLIER,
+                self.PERFORM_ROUTER_DISCOVERY,
+                self.TRAILER_ENCAPSULATION,
+                self.ETHERNET_ENCAPSULATION,
+                self.TCP_KEEPALIVE_GARBAGE
+            ]
+            BYTE_LIST_OPTIONS = [
+                self.CLIENT_ID,
+				self.VENDOR_CLASS_ID
+            ]
+
+            if option_type in BOOLEAN_OPTIONS:
+                option_data = self.__read_boolean(option_data)
+            if option_type in SINGLE_IP_OPTIONS:
+                ip_list = [str(option_data[0]), str(option_data[1]), str(option_data[2]), str(option_data[3])]
+                option_data = self.__read_ip(option_data)
+            if option_type in MULTI_IP_OPTIONS:
+                option_data = self.__read_ips(option_data)
+            if option_type in INTEGER_OPTIONS:
+                option_data = self.__read_int(option_data)
+            if option_type in BYTE_OPTIONS:
+                option_data = self.__read_byte(option_data)
+            if option_type in STRING_OPTIONS:
+                option_data = self.__read_string(option_data)
+            if option_type in BYTE_LIST_OPTIONS:
+                option_data = self.__read_byte_list(option_data)
+
+            if option_type == self.POLICY_FILTER:
+                option_data = self.__read_ip_and_masks(option_data)
+
+            if option_type == self.STATIC_ROUTING_TABLE:
+                option_data = self.__read_static_routing_table(option_data)
+
+            if option_type == self.PATH_MTU_PLATEAU_TABLE:
+                option_data = self.__read_mtu_plateau_table(option_data)
+
+            if option_type == self.PARAMETER_LIST:
+                options['PARAMETER_LIST_BYTES'] = option_data
+                option_data = self.__read_parameter_list(option_data)
+
+            options[self.OPTION_NAME[option_type]] = option_data
+            offset += 2+option_length
+        return options
+
+    def __read_boolean(self, option_data):
+        byte = self.__read_byte(option_data)
+        if byte == 1:
+            return True
+        return False
+    def __read_byte(self, option_data):
+        return option_data[0]
+    def __read_ips(self, option_data):
+        ip_list = []
+        count_ips = len(option_data) / 4
+        for ip_id in range(count_ips):
+            ip_data = option_data[ip_id*4:(ip_id*4)+4]
+            ip_list.append(self.__read_ip(ip_data))
+        return ip_list
+    def __read_ip(self, option_data):
+        ip_list = [str(option_data[0]), str(option_data[1]), str(option_data[2]), str(option_data[3])]
+        return '.'.join(ip_list)
+    def __read_int(self, option_data):
+        hex_string = ''
+        for byte in option_data:
+            hex_string += hex(byte)[2:].rjust(2,'0')
+        return int(hex_string, 16)
+    def __read_string(self, option_data):
+        string = ''
+        for byte in option_data:
+        	string += chr(byte)
+        return string
+
+    def __read_ip_and_masks(self, option_data):
+        option_data = self.__read_ips(option_data)
+        set_count = len(option_data) / 2
+        outlist = []
+        for addr_id in range(set_count):
+            data = option_data[addr_id*2:(addr_id*2)+2]
+            print data
+            outlist.append('/'.join(data))
+        return outlist
+
+    def __read_static_routing_table(self, option_data):
+        option_data = self.__read_ips(option_data)
+        set_count = len(option_data) / 2
+        outlist = []
+        for addr_id in range(set_count):
+            data = option_data[addr_id*2:(addr_id*2)+2]
+            print data
+            outlist.append(':'.join(data))
+        return outlist
+
+    def __read_mtu_plateau_table(self, option_data):
+        set_count = len(option_data) / 2
+        outlist = []
+        for addr_id in range(set_count):
+            data = option_data[addr_id*2:(addr_id*2)+2]
+            data = self.__read_int(data)
+            outlist.append(data)
+        return outlist
+
+    def __read_byte_list(self, option_data): #SENSELESS^^
+        return option_data
+
+    def __read_parameter_list(self, option_data):
+        out_list = []
+        for parameter in option_data:
+        	out_list.append(self.OPTION_NAME[parameter])
+        return out_list
+
+class DHCP_Packet(list):
+
+    class Packet_Type:
+        RESPONSE = 1
+        REPLY = 2
+
+    class Message_Type:
+    	DHCPDiscover 	= 1
+    	DHCPOffer 		= 2
+    	DHCPRequest		= 3
+    	DHCPDecline		= 4
+    	DHCPAck			= 5
+    	DHCPNak			= 6
+    	DHCPRelease 	= 7
+    	DHCPInform		= 8
+
+    def __init__(self, data):
+        for char in data:
+            self.append(char)
+        self.options = DHCP_Packet_Options(self)
+
+    @property
+    def packet_type(self):
+        return ord(self[0])
+    @packet_type.setter
+    def packet_type(self, packet_type):
+        self[0] = chr(packet_type)
+
+    @property
+    def hardware_address_type(self):
+        return ord(self[1])
+    @hardware_address_type.setter
+    def hardware_address_type(self, hardware_address_type):
+        self[1] = chr(hardware_address_type)
+
+    @property
+    def hardware_address_len(self):
+        return ord(self[2])
+    @hardware_address_len.setter
+    def hardware_address_len(self, hardware_address_len):
+        self[2] = chr(hardware_address_len)
+
+    @property
+    def hops(self):
+        return ord(self[3])
+    @hops.setter
+    def hops(self, hops):
+        self[3] = chr(hops)
+
+    @property
+    def transaction_id(self):
+        transaction_id_intlist = [ord(self[4]), ord(self[5]), ord(self[6]), ord(self[7])]
+        return self.__intlist_to_int(transaction_id_intlist)
+    @transaction_id.setter
+    def transaction_id(self, transaction_id):
+        intlist = self.__int_to_intlist(transaction_id)
+        chrlist = self.intlist_to_charlist(intlist)
+        self[4] = chrlist[0]
+        self[5] = chrlist[1]
+        self[6] = chrlist[2]
+        self[7] = chrlist[3]
+
+    @property
+    def secs(self):
+        secs_intlist = [0, 0, ord(self[8]), ord(self[9])]
+        return self.__intlist_to_int(secs_intlist)
+    @secs.setter
+    def secs(self, secs):
+        intlist = self.__int_to_intlist(secs)
+        chrlist = self.intlist_to_charlist(intlist)
+        self[8] = chrlist[2]
+        self[9] = chrlist[3]
+
+    @property
+    def flags(self):
+        flags_intlist = [0, 0, ord(self[10]), ord(self[11])]
+        return self.__intlist_to_int(flags_intlist)
+    @flags.setter
+    def flags(self, flags):
+        intlist = self.__int_to_intlist(secs)
+        chrlist = self.intlist_to_charlist(intlist)
+        self[10] = chrlist[2]
+        self[11] = chrlist[3]
+
+    @property
+    def current_client_ip(self):
+        return self.__read_ip(12)
+    @current_client_ip.setter
+    def current_client_ip(self, client_ip='0.0.0.0'):
+        self.__write_ip(client_ip, 12)
+
+    @property
+    def client_ip(self):
+        return self.__read_ip(16)
+    @client_ip.setter
+    def client_ip(self, client_ip='0.0.0.0'):
+        self.__write_ip(client_ip, 16)
+
+    @property
+    def server_ip(self):
+        return self.__read_ip(20)
+    @server_ip.setter
+    def server_ip(self, server_ip='0.0.0.0'):
+        self.__write_ip(server_ip, 20)
+
+    @property
+    def relay_agent_ip(self):
+        return self.__read_ip(24)
+    @relay_agent_ip.setter
+    def relay_agent_ip(self, server_ip='0.0.0.0'):
+        self.__write_ip(server_ip, 24)
+
+    @property
+    def client_hw_address(self):
+        return self.__read_hw()
+    @client_hw_address.setter
+    def client_hw_address(self, hw='00:00:00:00:00:00'):
+        self.__write_hw(hw)
+
+    @property
+    def server_host_name(self):
+        out_string = ''
+        for char in self.__read_string(44,64):
+            if char == '\0':
+                break
+            out_string += char
+        return out_string
+    @server_host_name.setter
+    def server_host_name(self, hostname):
+        self.__write_string(hostname, 44, 64)
+
+    @property
+    def boot_file_name(self):
+        out_string = ''
+        for char in self.__read_string(108,128):
+            if char == '\0':
+                break
+            out_string += char
+        return out_string
+    @boot_file_name.setter
+    def boot_file_name(self, file_path='pxelinux.0'):
+        self.__write_string(hostname, 108, 128)
+
+    @property
+    def magic_cookie(self):
+        magic_cookie_intlist = [ord(self[236]), ord(self[237]), ord(self[238]), ord(self[239])]
+        return self.__intlist_to_int(magic_cookie_intlist)
+    @magic_cookie.setter
+    def magic_cookie(self, magic_cookie):
+        intlist = self.__int_to_intlist(magic_cookie)
+        chrlist = self.intlist_to_charlist(intlist)
+        self[236] = chrlist[0]
+        self[237] = chrlist[1]
+        self[238] = chrlist[2]
+        self[239] = chrlist[3]
 
 
 
 
+    def __read_string(self, offset=0, length=1):
+        chrlist = self[offset:offset+length]
+        return ''.join(chrlist)
 
-import socket, binascii, time, IN, thread
-from json import dumps
-from sys import exit
+    def __write_string(self, string, offset=0, length=0):
+        for char_id, char in enumerate(string):
+            if char_id == length - 2:
+                break
+            self[offset+char_id] = char
+        while not char_id == length - 1:
+            self[offset+char_id+1] = '\0'
+            char_id += 1
 
+    def __read_hw(self, offset=28):
+        hw = []
+        hw_chrlist = self[offset:offset+16]
+        for char in hw_chrlist:
+            hw.append(hex(ord(char))[2:].rjust(2,'0'))
+        hw_out = hw[:self.hardware_address_len]
+        return ':'.join(hw_out)
 
+    def __write_hw(self, hw, offset=28):
+        hw_list = hw.split(':')
+        hw_intlist = []
+        for byte in hw_list:
+            integer = int(byte, 16)
+            hw_intlist.append(integer)
+        for byte_id in range(self.hardware_address_len):
+            try:
+                self[offset+byte_id] = chr(hw_intlist[byte_id])
+            except IndexError:
+                self[offset+byte_id] = chr(0)
 
-def packet_raw_output(string, hx=True):
-	if hx:
-		hx=0
-	else:
-		hx=1
+    def __read_ip(self, offset=0):
+        ip_intlist = [ord(self[offset]), ord(self[offset+1]), ord(self[offset+2]), ord(self[offset+3])]
+        ip_int = self.__intlist_to_int(ip_intlist)
+        return Tools.int_to_ip(ip_int)
 
-	print '+-----------------'+ '-'*(4*hx) +'+'
-	raw_data = []
-	for char in string:
-		raw_data.append( (hex(ord(char))[2:].rjust(2,'0'), str(ord(char)).rjust(3,'0')) )
-		c = 0
-	for id, dat in enumerate(raw_data):
-		if c == 0:
-			print '|'+ str(id).rjust(3,'0')+'|',
-		print dat[hx],
-		c += 1
-		if c == 4:
-			c=0
-			print '|'
-	print
-	print '+-----------------'+ '-'*(4*hx) +'+'
+    def __write_ip(self, ip, offset=0):
+        ip_int = Tools.ip_to_int(ip)
+        intlist = self.__int_to_intlist(ip_int)
+        chrlist = self.intlist_to_charlist(intlist)
+        self[offset] = chrlist[0]
+        self[offset+1] = chrlist[1]
+        self[offset+2] = chrlist[2]
+        self[offset+3] = chrlist[3]
 
+    def __intlist_to_int(self, int_list=[0,0,0,0]):
+        integer = 0
+        integer += (int_list[0] * 16777216)
+        integer += (int_list[1] * 65536)
+        integer += (int_list[2] * 256)
+        integer += int_list[3]
+        return integer
 
+    def intlist_to_charlist(self, int_list=[0,0,0,0]):
+        return [chr(int_list[0]),chr(int_list[1]),chr(int_list[2]),chr(int_list[3])]
 
-class DHCP_Packet(object):
-	RESPONSE	= 1
-	REPLY 		= 2
+    def __int_to_intlist(self, integer=0):
+        intlist = [0,0,0,0]
+        integer_hex = hex(integer)[2:].rjust(8,'0')
+        int_0 = int(integer_hex[:2],16)
+        int_1 = int(integer_hex[2:4],16)
+        int_2 = int(integer_hex[4:6],16)
+        int_3 = int(integer_hex[6:8],16)
+        intlist = [int_0, int_1, int_2, int_3]
+        return intlist
 
+    def __str__(self):
+        return self.__packet_raw_output()
 
-
-	OPTION_TYPE = {
-		0: 'PAD',
-		1: 'SUBNET_MASK',
-		3: 'ROUTER',
-		6: 'DNS_SERVER',
-		12: 'HOSTNAME',
-		15: 'DOMAIN_NAME',
-		26: 'MTU',
-		28: 'BROADCAST',
-		33: 'STATIC_ROUTING_TABLE',
-		42: 'NTP_SERVER',
-		50: 'REQUESTED_IP',
-		51: 'IP_LEASE_TIME',
-		53: 'MSG_TYPE',
-		54: 'SERVER_ID',
-		55: 'PARAM_LIST',
-		57: 'MAX_MSG_SIZE',
-		58: 'RENEW_TIME_VALUE',
-		59: 'REBINDING_TIME_VALUE',
-		60: 'CLASS_ID',
-		255:'END'
-	}
-
-	MSG_TYPE = {
-		1: 'DHCPDiscover',
-		2: 'DHCPOffer',
-		3: 'DHCPRequest',
-		4: 'DHCPDecline',
-		5: 'DHCPAck',
-		6: 'DHCPNak',
-		7: 'DHCPRelease',
-		8: 'DHCPInform'
-	}
-
-
-	def __init__(self, data):
-		self.data = data
-		self.op = ord(data[0])
-		self.htype = ord(data[1])
-		self.hlen = ord(data[2])
-		self.hops = ord(data[3])
-		self.xid = self.read_xid(data)
-		self.secs = self.read_secs(data)
-		self.flags = self.read_flags(data)
-		self.client_ip = self.read_ip(data, 12)
-		self.your_ip = self.read_ip(data, 16)
-		self.server_ip = self.read_ip(data, 20)
-		self.gateway_ip = self.read_ip(data, 24)
-		self.client_hw_address = self.read_hw(data)
-		self.client_hw_address_extention = self.read_hw_extention(data)
-		self.additional_options_data = self.read_additional_options_data(data)
-		self.magic_cookie = self.read_magic_cookie(data)
-
-
-
-		for option in self.get_dhcp_options_raw(data):
-			#print option
-			if option[0] == Option_Type.HOSTNAME:
-				self.dhcp_option_hostname = self.read_string(option)
-
-			elif option[0] == Option_Type.MSG_TYPE:
-				self.dhcp_message_type = option[1][0]
-
-			elif option[0] == Option_Type.MAX_MSG_SIZE:
-				self.dhcp_max_message_size = self.read_max_message_size(option)
-
-			elif option[0] == Option_Type.CLASS_ID:
-				self.dhcp_class_identifier = self.read_string(option)
-
-			elif option[0] == Option_Type.PARAM_LIST:
-				self.dhcp_parameter_list = option[1]
-
-			elif option[0] == Option_Type.REQUESTED_IP:
-				self.requested_ip = self.read_requested_ip(option)
-
-			elif option[0] == Option_Type.SERVER_ID:
-				self.requested_Server_ip = self.read_requested_ip(option)
-
-			elif option[0] == Option_Type.END:
-				pass
-
-			elif option[0] == Option_Type.PAD: #####NOT IMPLENTED = read_pad()
-				self.pad = 0
-
-
-			else:
-				print 'NOT KNOWN YET: ', option
-
-
-
-		self.domain_name = 'local'
-
-
-
-	def read_xid(self, data, offset=4):
-		xid = [ord(data[offset]), ord(data[offset+1]), ord(data[offset+2]), ord(data[offset+3])]
-		return xid
-
-	def read_secs(self, data, offset=8):
-		secs = [ord(data[offset]), ord(data[offset+1])]
-		return secs
-
-	def read_flags(self, data, offset=10):
-		flags = [ord(data[offset]), ord(data[offset+1])]
-		return flags
-
-	def read_ip(self, data, offset=0):
-		ip_data = (str(ord(data[offset])), str(ord(data[offset+1])), str(ord(data[offset+2])), str(ord(data[offset+3])))
-		ip = '.'.join(ip_data)
-		return ip
-
-	def read_hw(self, data, offset=28):
-		client_hw_data = (
-		str(hex(ord(data[offset+0])))[2:].rjust(2,'0'),
-		str(hex(ord(data[offset+1])))[2:].rjust(2,'0'),
-		str(hex(ord(data[offset+2])))[2:].rjust(2,'0'),
-		str(hex(ord(data[offset+3])))[2:].rjust(2,'0'),
-		str(hex(ord(data[offset+4])))[2:].rjust(2,'0'),
-		str(hex(ord(data[offset+5])))[2:].rjust(2,'0'))
-		client_hw = ':'.join(client_hw_data)
-
-		#print client_hw, client_hw_data
-		return client_hw
-
-	def read_hw_extention(self, data, offset=28):
-		return data[offset+6:offset+16]
-
-	def read_additional_options_data(self, data, offset=43):
-		return data[offset:offset+192]
-
-	def read_magic_cookie(self, data, offset=236):
-		magic_cookie = [ord(data[offset]), ord(data[offset+1]), ord(data[offset+2]), ord(data[offset+3])]
-		return magic_cookie
-
-
-
-	def get_dhcp_options_raw(self, data):
-		dhcp_options = []
-		next_offset = 0
-		try:
-			while True:
-		 		option_type, option_content, next_offset = self.get_dhcp_option(data, next_offset)
-				dhcp_options.append((option_type, option_content))
-		except IndexError:
-			pass
-		return dhcp_options
-
-	def get_dhcp_option(self, data, offset=0):
-		address = offset + 240
-		dhcp_option_type = ord(data[address])
-		address += 1
-		dhcp_option_length = ord(data[address])
-		address += 1
-		dhcp_option_content = []
-
-		for char in data[address:address + dhcp_option_length]:
-			dhcp_option_content.append(ord(char))
-
-		address += dhcp_option_length
-		next_offset = address - 240
-		return (dhcp_option_type, dhcp_option_content, next_offset)
-
-
-	def read_string(self, option):
+    def __packet_raw_output(self):
 		string = ''
-		for byte in option[1]:
-			string += chr(byte)
+		raw_data = []
+		string += '+-----------------+\n'
+		for char in self:
+			raw_data.append(hex(ord(char))[2:].rjust(2,'0'))
+			c = 0
+		for id, dat in enumerate(raw_data):
+			if c == 0:
+				string += '|'+ str(id).rjust(3,'0')+'|'
+			string += dat + ' '
+			c += 1
+			if c == 4:
+				c=0
+				string += '|\n'
+		string += '+-----------------+\n'
 		return string
 
-	def read_max_message_size(self, option):
-		value_1 = option[1][0]
-		value_256 = option[1][1]
-		return (value_256 * 256) + value_1
-
-	def read_requested_ip(self, option):
-		ip = []
-		for byte in option[1]:
-			ip.append(str(byte))
-		return '.'.join(ip)
-
-
-	def is_dhcp_discovery(self):
-		if self.dhcp_message_type == Message_Type.DHCPDiscover:
+    def is_dhcp_discovery(self):
+		if self.options.options['MESSAGE_TYPE'] == self.Message_Type.DHCPDiscover:
 			return True
 		return False
 
-	def is_dhcp_request(self):
-		if self.dhcp_message_type == Message_Type.DHCPRequest:
+    def is_dhcp_request(self):
+		if self.options.options['MESSAGE_TYPE'] == self.Message_Type.DHCPRequest:
 			return True
 		return False
-
-
-
-	def generate_dhcp_paket(self, message_type, your_ip, server_ip):
-		self.op = self.REPLY
-		self.your_ip = your_ip
-		self.server_ip = server_ip
-		self.dhcp_message_type = message_type
-
-		lease_time = 60
-		lease_time_bytes = binascii.unhexlify(hex(lease_time)[2:].rjust(8,'0'))
-		lease_time_option_list = []
-		for char in lease_time_bytes:
-			lease_time_option_list.append(ord(char))
-		lease_time_option = (51,lease_time_option_list)
-
-		tftp_address = server_ip
-		tftp_address_option_list = []
-		for char in tftp_address:
-			tftp_address_option_list.append(ord(char))
-		tftp_address_option = (66,tftp_address_option_list)
-
-		tftp_file = 'pxelinux.0'
-		tftp_file_option_list = []
-		for char in tftp_file:
-			tftp_file_option_list.append(ord(char))
-		tftp_file_option = (67,tftp_file_option_list)
-
-		domain_name = self.domain_name
-		domain_name_option_list = []
-		for char in domain_name:
-			domain_name_option_list.append(ord(char))
-		domain_name_option = (15,domain_name_option_list)
-
-
-
-		host_name = self.dhcp_option_hostname
-		host_name_option_list = []
-		for char in host_name:
-			host_name_option_list.append(ord(char))
-		host_name_option = (12,host_name_option_list)
-
-		ntp_server = 'de.pool.ntp.org'
-		ntp_server_option_list = []
-		for char in ntp_server:
-			ntp_server_option_list.append(ord(char))
-		ntp_sevrer_option = (42,ntp_server_option_list)
-
-
-		options = [
-			(53,[self.dhcp_message_type]),
-			(1,[255,255,0,0]),
-			(54,[10,10,10,2]),
-			(28,[10,10,255,255]),
-			(3,[10,10,0,1]),
-			(6,[8,8,8,8,8,8,4,4]),
-			ntp_sevrer_option,
-			domain_name_option,
-			host_name_option,
-			lease_time_option,
-			tftp_address_option,
-			tftp_file_option
-		]
-
-		options_string = self.generate_dhcp_options(options)
-		packet_string = self.generate_packet(options_string)
-		return packet_string
-
-
-	def generate_dhcp_options(self, options):
-		options_string = ''
-		for option in options:
-			options_string += self.generate_dhcp_option(option)
-		return options_string
-
-	def generate_dhcp_option(self, option):
-		option_type = option[0]
-		option_length = len(option[1])
-		option_payload = option[1]
-		option_packet = [option_type, option_length]
-		option_packet.extend(option_payload)
-		return self.generate_string(option_packet)
-
-	def generate_string(self, byte_list):
-		string = ''
-		for byte in byte_list:
-			string += chr(byte)
-		return string
-
-	def generate_packet(self, options_string):
-		packet_string = ''
-		packet_string += chr(self.op)
-		packet_string += chr(self.htype)
-		packet_string += chr(self.hlen)
-		packet_string += chr(self.hops)
-		packet_string += self.generate_string(self.xid)
-		packet_string += self.generate_string(self.secs)
-		packet_string += self.generate_string(self.flags)
-		packet_string += self.generate_string(self.write_ip(self.client_ip))
-		packet_string += self.generate_string(self.write_ip(self.your_ip))
-		packet_string += self.generate_string(self.write_ip(self.server_ip))
-		packet_string += self.generate_string(self.write_ip(self.gateway_ip))
-
-		packet_string += self.generate_string(self.write_hw(self.client_hw_address))
-		packet_string += self.client_hw_address_extention
-		packet_string += self.additional_options_data
-		packet_string += self.generate_string(self.magic_cookie)
-		packet_string += options_string
-		packet_string += chr(0)+chr(255)
-		return packet_string
-
-	def write_ip(self, ip_string):
-		ip_string = ip_string.split('.')
-		ip = []
-		for byte in ip_string:
-			try:
-				ip.append(int(byte))
-			except:
-				break
-		return ip
-
-	def write_hw(self, hw_string):
-		hw_string = hw_string.split(':')
-		hw = []
-		for byte in hw_string:
-			byte = int(byte, 16)
-			try:
-				hw.append(int(byte))
-			except:
-				break
-		return hw
-
-
-
 
 
 class DHCP_Server(object):
@@ -627,31 +856,25 @@ class DHCP_Server(object):
 		self.ntp = 'de.pool.ntp.org'
 		self.range = ['10.10.50.1','10.10.50.9']
 		self.default_lease_time = 60
-		self.leases = Leases(self.range)
-		self.discoveries = []
-		self.check_thread = thread.start_new_thread(self.delete_expired_leases ,(True,))
+		self.leases = Leases(self.server_ip, self.netmask, ip_range=self.range)
 
+        #self.dhcp_thread = thread.start_new_thread(self.run,(None,))
 
-	def delete_expired_leases(self, v):
-		while True:
-			for mac in self.leases.keys():
-				current_time = int(time.time())
-				print self.leases.used_ip_list
-				if current_time >= self.leases[mac]['lease_ends'] - 2:
-					ip_id = self.leases.used_ip_list.index(self.leases[mac]['ip'])
-					del self.leases.used_ip_list[ip_id]
-					del self.leases[mac]
-					print mac, 'deleted.'
-					break
-
-			time.sleep(1)
+	def __delete_expired_leases(self):
+		delete_ip_list = []
+		for mac in self.leases.mac_addresses:
+			lease = self.leases.leases[mac]
+			if not lease.valid:
+				delete_ip_list.append(lease.ip)
+		for ip in delete_ip_list:
+			self.leases.delete(ip)
 
 	def __get_mtu(self):
 		with open('/sys/class/net/'+self.interface+'/mtu') as mtu:
 			mtu = mtu.read()
 		return int(mtu)
 
-	def run(self):
+	def run(self, nothing=None):
 		if not hasattr(IN, 'SO_BINDTODEVICE'):
 			IN.SO_BINDTODEVICE = 25  #http://stackoverflow.com/a/8437870/541038
 
@@ -668,21 +891,23 @@ class DHCP_Server(object):
 				packet = DHCP_Packet(message)
 				mac_address = packet.client_hw_address
 
-				if packet.is_dhcp_discovery(): #############################DHCPDiscover
-					lease = self.leases.exists_lease(mac_address)
-					if lease == False:
-						lease = self.leases.create(mac_address, time=self.default_lease_time)
-						if lease == False:
-							self.send_Nak(s, packet)
-					else:
-						self.send_Offer(s, packet, lease['ip'])
-				elif packet.is_dhcp_request():
-					lease = self.leases.exists_lease(mac_address)
-					if lease == False:
-						self.send_Nak(s, packet)
-					else:
-						self.send_Ack(s, packet, lease['ip'])
-						print 'LEASED:', lease['ip']
+				if packet.is_dhcp_discovery():
+					print packet
+
+				# 	lease = self.leases.exists_lease(mac_address)
+				# 	if lease == False:
+				# 		lease = self.leases.create(mac_address, time=self.default_lease_time)
+				# 		if lease == False:
+				# 			self.send_Nak(s, packet)
+				# 	else:
+				# 		self.send_Offer(s, packet, lease['ip'])
+				# elif packet.is_dhcp_request():
+				# 	lease = self.leases.exists_lease(mac_address)
+				# 	if lease == False:
+				# 		self.send_Nak(s, packet)
+				# 	else:
+				# 		self.send_Ack(s, packet, lease['ip'])
+				# 		print 'LEASED:', lease['ip']
 
 
 			except KeyboardInterrupt:
@@ -713,8 +938,8 @@ class DHCP_Server(object):
 
 
 
-#dhcp = DHCP_Server('wlan0','10.10.10.2','255.255.0.0')
-#dhcp.run()
+dhcp = DHCP_Server('wlan0','10.10.10.2','255.255.0.0')
+dhcp.run()
 
 
 
