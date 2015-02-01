@@ -364,7 +364,7 @@ class DHCP_Packet_Options(list):
         56: 'MESSAGE',
     	57: 'MAX_MESSAGE_SIZE',
     	58: 'RENEWAL_T1_TIME_VALUE',
-    	59: 'REBINDING_TIME_VALUE',
+    	59: 'REBINDING_T2_TIME_VALUE',
     	60: 'VENDOR_CLASS_ID',
         61: 'CLIENT_ID',
         64: 'NET_INFO_SERVICE_PLUS_DOMAIN',
@@ -388,7 +388,50 @@ class DHCP_Packet_Options(list):
            self.append(ord(char))
 
         self.options = self.__read_options()
+        self.sending_options = []
         print dumps(self.options, indent=4)
+
+    def add_option(self, option_type, option_data):
+        print option_type, option_data, type(option_data)
+
+
+        if "'int'" in str(type(option_data)):
+        	self.sending_options.append(chr(option_type))
+        	if option_type == self.MESSAGE_TYPE:
+        		option_length = 1
+        	if option_type == self.MTU:
+        		option_length = 2
+        	LENGTH_4_TYPES = [
+        		self.IP_LEASE_TIME,
+        		self.RENEWAL_T1_TIME_VALUE,
+        		self.REBINDING_T2_TIME_VALUE
+			]
+        	if option_type in LENGTH_4_TYPES:
+        		option_length = 4
+        	self.sending_options.append(chr(option_length))
+        	option_data_hex = hex(option_data)[2:].rjust(option_length * 2,'0')
+        	for i in range(option_length):
+        		self.sending_options.append(chr(int(option_data_hex[i*2:(i*2)+2],16)))
+
+        if "'str'" in str(type(option_data)):
+        	self.sending_options.append(chr(option_type))
+        	self.sending_options.append(chr(len(option_data)))
+			for char in option_data:
+				self.sending_options.append(char)
+
+        if "'list'" in str(type(option_data)):
+			entry_type = str(type(option_data[0]))
+			if  "'str'" in entry_type:
+				length = 0
+				for entry in option_data:
+					length += len()
+
+        	self.sending_options.append(chr(option_type))
+        	self.sending_options.append(chr(len(option_data)))
+			for char in option_data:
+				self.sending_options.append(char)
+
+
 
     def __read_options(self):
         options = {}
@@ -468,7 +511,8 @@ class DHCP_Packet_Options(list):
                 self.NET_INFO_SERVICE_PLUS_DOMAIN,
                 self.TFTP_SERVER_NAME,
                 self.BOOTFILE_NAME,
-                self.MESSAGE
+                self.MESSAGE,
+				self.VENDOR_CLASS_ID
             ]
             BOOLEAN_OPTIONS = [
                 self.IP_FORWARD,
@@ -482,8 +526,7 @@ class DHCP_Packet_Options(list):
                 self.TCP_KEEPALIVE_GARBAGE
             ]
             BYTE_LIST_OPTIONS = [
-                self.CLIENT_ID,
-				self.VENDOR_CLASS_ID
+                self.CLIENT_ID
             ]
 
             if option_type in BOOLEAN_OPTIONS:
@@ -725,7 +768,7 @@ class DHCP_Packet(list):
             out_string += char
         return out_string
     @boot_file_name.setter
-    def boot_file_name(self, file_path='pxelinux.0'):
+    def boot_file_name(self, file_path='/pxelinux.0'):
         self.__write_string(hostname, 108, 128)
 
     @property
@@ -844,18 +887,33 @@ class DHCP_Packet(list):
 		return False
 
 
+
+
+config = {
+	'interface': 'wlan0',
+	'server_ip': '10.10.10.2',
+	'netmask': '255.255.0.0',
+	'gateway': '10.10.0.1',
+	'dns': ['8.8.8.8','8.8.4.4'],
+	'domain': 'silvano87.local',
+	'ntp_server': 'de.pool.ntp.org',
+	'range': ['10.10.10.50','10.10.10.100'],
+	'default_lease_time': 120,
+}
+
 class DHCP_Server(object):
-	def __init__(self, interface, server_ip, netmask):
-		self.interface = interface
+	def __init__(self, config):
+		self.interface = config['interface']
 		self.mtu = self.__get_mtu()
 		self.port = 67
-		self.server_ip = server_ip
-		self.netmask = netmask
-		self.gateway = server_ip
-		self.dns = ['8.8.8.8', '8.8.4.4']
-		self.ntp = 'de.pool.ntp.org'
-		self.range = ['10.10.50.1','10.10.50.9']
-		self.default_lease_time = 60
+		self.server_ip = config['server_ip']
+		self.netmask = config['netmask']
+		self.gateway = config['gateway']
+		self.dns = config['dns']
+		self.domain = config['domain']
+		self.ntp = config['ntp_server']
+		self.range = config['range']
+		self.default_lease_time = config['default_lease_time']
 		self.leases = Leases(self.server_ip, self.netmask, ip_range=self.range)
 
         #self.dhcp_thread = thread.start_new_thread(self.run,(None,))
@@ -892,14 +950,15 @@ class DHCP_Server(object):
 				mac_address = packet.client_hw_address
 
 				if packet.is_dhcp_discovery():
-					print packet
+				 	lease = self.leases.exists_lease(mac_address)
+				 	if lease == False:
+				 		lease = self.leases.create(mac_address, time=self.default_lease_time)
+				 		if lease == False:
+				 			self.generate_Nak(lease, packet)
 
-				# 	lease = self.leases.exists_lease(mac_address)
-				# 	if lease == False:
-				# 		lease = self.leases.create(mac_address, time=self.default_lease_time)
-				# 		if lease == False:
-				# 			self.send_Nak(s, packet)
-				# 	else:
+
+				 	else:
+						self.generate_Offer(lease, packet)
 				# 		self.send_Offer(s, packet, lease['ip'])
 				# elif packet.is_dhcp_request():
 				# 	lease = self.leases.exists_lease(mac_address)
@@ -915,12 +974,41 @@ class DHCP_Server(object):
 
 
 
-	def send_Nak(self, s, packet):
-		data = packet.generate_dhcp_paket(Message_Type.DHCPNak, '0.0.0.0', self.server_ip)
-		if data:
-			s.sendto(data,('<broadcast>',68)) ##################DHCPNack
-			return True
-		return False
+	def generate_Offer(self, lease, packet):
+		packet.packet_type = packet.Packet_Type.REPLY
+		packet.client_ip = lease.ip
+		packet.server_ip = self.server_ip
+		packet.options.add_option(packet.options.MESSAGE_TYPE, packet.Message_Type.DHCPOffer)
+
+		for requested_option_type in packet.options.options['PARAMETER_LIST_BYTES']:
+			if requested_option_type == packet.options.SUBNET_MASK:
+				packet.options.add_option(packet.options.SUBNET_MASK, self.netmask)
+			elif requested_option_type == packet.options.ROUTER:
+				packet.options.add_option(packet.options.ROUTER, self.gateway)
+			elif requested_option_type == packet.options.DNS_SERVER:
+				packet.options.add_option(packet.options.DNS_SERVER, self.dns)
+			elif requested_option_type == packet.options.DOMAIN_NAME:
+				packet.options.add_option(packet.options.DOMAIN_NAME, self.domain)
+			elif requested_option_type == packet.options.MTU:
+				packet.options.add_option(packet.options.MTU, self.mtu)
+			elif requested_option_type == packet.options.BROADCAST:
+				packet.options.add_option(packet.options.BROADCAST, Tools.broadcast_address_from(self.server_ip, self.netmask))
+			elif requested_option_type == packet.options.SERVER_ID:
+				packet.options.add_option(packet.options.SERVER_ID, self.server_ip)
+			elif requested_option_type == packet.options.RENEWAL_T1_TIME_VALUE:
+				packet.options.add_option(packet.options.RENEWAL_T1_TIME_VALUE, self.default_lease_time / 2)
+			elif requested_option_type == packet.options.REBINDING_T2_TIME_VALUE:
+				packet.options.add_option(packet.options.REBINDING_T2_TIME_VALUE, (self.default_lease_time / 4) * 3)
+			elif requested_option_type == packet.options.IP_LEASE_TIME:
+				packet.options.add_option(packet.options.IP_LEASE_TIME, self.default_lease_time)
+
+		print packet.options.sending_options
+
+		#data = packet.generate_dhcp_paket(Message_Type.DHCPNak, '0.0.0.0', self.server_ip)
+		#if data:
+		#	s.sendto(data,('<broadcast>',68)) ##################DHCPNack
+		#	return True
+		#return False
 
 	def send_Offer(self, s, packet, ip_address):
 		data = packet.generate_dhcp_paket(Message_Type.DHCPOffer, ip_address, self.server_ip)
@@ -938,7 +1026,7 @@ class DHCP_Server(object):
 
 
 
-dhcp = DHCP_Server('wlan0','10.10.10.2','255.255.0.0')
+dhcp = DHCP_Server(config)
 dhcp.run()
 
 
