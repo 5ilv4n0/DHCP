@@ -179,7 +179,8 @@ class DHCP_Packet_Options(list):
 
 
 
-    def create(self, option_type, )
+    #def create(self, option_type, option_data):
+
 
 
 
@@ -302,7 +303,7 @@ class DHCP_Packet_Options(list):
                 option_data = self.__read_string(option_data)
             if option_type in BYTE_LIST_OPTIONS:
                 option_data = self.__read_byte_list(option_data)
-
+                
             if option_type == self.POLICY_FILTER:
                 option_data = self.__read_ip_and_masks(option_data)
             if option_type == self.STATIC_ROUTING_TABLE:
