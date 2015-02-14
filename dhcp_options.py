@@ -3,12 +3,40 @@ from json import dumps
 
 
 class DHCP_Packet_Option(object):
+    IP_BASED_OPTIONS = [1,3,4,5,6,7,8,9,10,11,16,28,42,50,54,61,69,70,71,72,73,74,75,76]
+
     def __init__(self, typ, string):
         self.type = typ
         self.payload = []
-        for char in string:
-            self.payload.append(ord(char))
-        self.length = len(self.payload)
+
+        if self.type == 0:    
+            self.length = 0
+
+        elif self.type in IP_BASED_OPTIONS:
+            SUBNET_MASK = []
+            string = string.split('.')
+            for byte in string:
+                SUBNET_MASK.append(int(byte))
+            self.payload = SUBNET_MASK
+            self.length = len(self.payload)
+
+
+        else:
+            for char in string:
+                self.payload.append(ord(char))
+            self.length = len(self.payload)
+
+
+
+
+    def read(self):
+        char_buffer = ''
+        char_buffer += chr(self.type)
+        char_buffer += chr(self.length)
+        for byte in self.payload:
+            char_buffer += chr(byte)
+        return char_buffer
+
 
 
 
@@ -391,12 +419,12 @@ class DHCP_Packet_Options(list):
 
 
 
-packet = '\x35\x01\x01\x01\x04\xff\xff\x00\x00\xff'
-o = DHCP_Packet_Options(packet, 0)
-print o
-for oo in o:
-    print oo.__dict__
+# packet = '\x35\x01\x01\x01\x04\xff\xff\x00\x00\xff'
+# o = DHCP_Packet_Options(packet, 0)
+# print o
+# for oo in o:
+#     print oo.__dict__
 
 
-empty_o = DHCP_Packet_Options()
-print empty_o
+# empty_o = DHCP_Packet_Options()
+# print empty_o
