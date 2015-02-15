@@ -28,7 +28,6 @@ class DHCP_Packet_Option(object):
 
 
 
-
     def read(self):
         char_buffer = ''
         char_buffer += chr(self.type)
@@ -36,6 +35,9 @@ class DHCP_Packet_Option(object):
         for byte in self.payload:
             char_buffer += chr(byte)
         return char_buffer
+
+
+
 
 
 
@@ -350,12 +352,13 @@ class DHCP_Packet_Options(list):
 
 
 
+
     def __read_boolean(self, option_data):
         byte = self.__read_byte(option_data)
         if byte == 1:
             return True
         return False
-    def __read_byte(self, option_data):
+    def __read_byte(self, option_data):        
         return option_data[0]
     def __read_ips(self, option_data):
         ip_list = []
